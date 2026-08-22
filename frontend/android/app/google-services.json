@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "670122307373",
+    "project_id": "darshanpms-5defe",
+    "storage_bucket": "darshanpms-5defe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:670122307373:android:e40bddc90db3b49eb0eda4",
+        "android_client_info": {
+          "package_name": "com.darshan.pms"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyIulx1naYveQqs16pqjHv6VEAwR0iNgE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

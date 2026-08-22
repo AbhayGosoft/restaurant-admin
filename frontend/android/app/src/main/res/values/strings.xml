@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Darshan</string>
+    <string name="title_activity_main">Darshan</string>
+    <string name="package_name">com.darshan.pms</string>
+    <string name="custom_url_scheme">com.darshan.pms</string>
+</resources>
