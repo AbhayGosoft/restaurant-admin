@@ -1,23 +1,24 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { clsx } from "clsx";
-import { Building2, IndianRupee, Layers3, Percent, Settings, ShieldCheck, Sparkles, Tags, Utensils } from "lucide-react";
+import { Building2, Clock, Settings, Tags, UtensilsCrossed } from "lucide-react";
+import { useAppStore } from "@/store/app-store";
 
-const tabs = [
+const baseTabs = [
   { to: "general", label: "General", icon: Building2 },
-  { to: "categories", label: "Categories", icon: Tags },
-  { to: "room-types", label: "Room types", icon: Layers3 },
-  { to: "services", label: "Services", icon: Utensils },
-  { to: "rate-plans", label: "Rate plans", icon: IndianRupee },
-  { to: "amenities", label: "Amenities", icon: Sparkles },
-  { to: "taxes", label: "Taxes", icon: Percent },
-  { to: "policies", label: "Policies", icon: ShieldCheck },
+  { to: "menu", label: "Menu", icon: UtensilsCrossed },
+  { to: "slots", label: "Slots", icon: Clock },
 ];
 
+const superAdminTabs = [{ to: "categories", label: "Categories", icon: Tags }];
+
 export function SettingsLayout() {
+  const isSuperAdmin = useAppStore((state) => state.admin?.role === "SUPERADMIN");
+  const tabs = isSuperAdmin ? [...baseTabs, ...superAdminTabs] : baseTabs;
+
   return (
     <main className="page settings-page">
       <section className="resource-head">
-        <span className="eyebrow"><Settings size={14} /> Property settings</span>
+        <span className="eyebrow"><Settings size={14} /> Restaurant settings</span>
       </section>
       <nav className="settings-tabs">
         {tabs.map(({ to, label, icon: Icon }) => (

@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `stay_profiles` MODIFY `type` ENUM('HOMESTAY', 'DHARAMSHALA', 'AIRBNB', 'HOTEL', 'RESORT', 'ASHRAM', 'OTHER') NOT NULL;

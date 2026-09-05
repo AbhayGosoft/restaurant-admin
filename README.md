@@ -1,22 +1,29 @@
-# Darshan Connector (Stay PMS)
+# Restaurant Reservation System
 
-Enterprise Property Management System for stay/property owners — rooms, halls,
-dormitories, bookings, rate plans, services, and live partner adapter (GoAdapter)
-integration. The system is a two-package monorepo: an Express/TypeScript API and
-a mobile-first React/Capacitor client that ships as an Android app.
+A standalone restaurant table-reservation platform — Firebase phone-auth
+customers, Razorpay booking-advance payments, and an Admin/SuperAdmin web
+dashboard for managing restaurants, menus, slots, and bookings. Two-package
+monorepo: an Express/TypeScript API and a React admin dashboard that also
+ships as an Android app via Capacitor.
+
+This repository was transformed from a Hotel/PMS template ("Darshan
+Connector"). The Restaurant backend has **no dependency on GoAdapter or any
+Hotel domain model** (StayProfile/Room/RoomType/RatePlan/etc.) — it owns its
+own authentication, database, and business logic end to end. See
+`backend/README.md` for the full domain model, API list, and what changed.
 
 ## Repository Layout
 
 ```text
 backend/   Node.js + Express + Prisma API — see backend/README.md
-frontend/  React + Vite + Capacitor Android app — see frontend/README.md
+frontend/  React + Vite + Capacitor Android admin dashboard — see frontend/README.md
 .github/workflows/
-  backend-deploy.yml   CI/CD: validate + deploy backend to the VPS on push to main
+  backend-deploy.yml   CI/CD: validate + test + deploy backend to the VPS on push to main
   frontend-deploy.yml  CI/CD: build + upload frontend dist/ to the VPS on push to main
 ```
 
-Each package has its own dependencies, `.env` files, and lifecycle — always `cd`
-into `backend/` or `frontend/` before running its scripts.
+Each package has its own dependencies, `.env` files, and lifecycle — always
+`cd` into `backend/` or `frontend/` before running its scripts.
 
 ## Tech Stack
 
@@ -27,53 +34,63 @@ into `backend/` or `frontend/` before running its scripts.
 | Data | Prisma 7 + MySQL/MariaDB | TanStack Query, Zustand |
 | Realtime | Socket.IO (Redis adapter), BullMQ | Socket.IO client |
 | Mobile | — | Capacitor (Android) |
-| Auth | JWT + shared client key | — |
-| Push | Firebase Cloud Messaging (admin SDK) | Capacitor Push Notifications |
+| Auth | Firebase phone-auth (customers), JWT + bcrypt (Admin/SuperAdmin) | — |
+| Payments | Razorpay (booking advance) | — |
+| Push | OneSignal (customer notifications) | — |
+| Tests | Vitest (unit + mocked-Prisma integration) | — |
 
 ## Getting Started
 
-Start the backend first, then the frontend — the frontend proxies API calls to it.
+Start the backend first, then the frontend — the frontend proxies API calls
+to it.
 
 ```bash
 # Backend
 cd backend
-cp .env.example .env      # fill in DATABASE_URL, JWT_SECRET, APP_CLIENT_KEY, etc.
+cp .env.example .env      # fill in DATABASE_URL at minimum
 npm install
-npm run prisma:migrate
-npm run create-admin
-npm run dev                # http://localhost:4000
+npm run prisma:generate
+npm run prisma:migrate     # applies prisma/migrations/20260822000000_init
+npm run db:seed            # 2 restaurants, SuperAdmin, Admin, menu, slots
+npm run dev                 # http://localhost:4000
 
 # Frontend (in a second terminal)
 cd frontend
 cp .env.example .env       # VITE_CLIENT_KEY must match backend APP_CLIENT_KEY
 npm install
-npm run dev                # http://localhost:5173
+npm run dev                 # http://localhost:3000
 ```
 
-Full setup, environment variables, database/Redis requirements, Android build
-steps, and API details live in the package READMEs:
+Requires a reachable MySQL/MariaDB server and Redis 6.2+. Full setup,
+environment variables, the customer-facing API list, payment/notification
+flow, and Android build steps live in the package READMEs:
 
 - [backend/README.md](backend/README.md)
 - [frontend/README.md](frontend/README.md)
 
 ## Core Concepts
 
-- One owner can have many properties; each property owns its categories, room
-  types, rooms, rate plans, services, amenities, and availability.
-- Owners complete a progressive setup flow — `CATEGORY -> ROOM_TYPE -> ROOM ->
-  RATE_PLAN -> SERVICE -> COMPLETED` — before they can take bookings.
-- New adapter bookings are held `PENDING` for five minutes before auto-cancel,
-  with live updates pushed over Socket.IO and processed through BullMQ queues.
-- The partner-facing GoAdapter contract is exposed under `/api/partner`
-  (aliased at `/api/integrations`) for external booking systems, separate from
-  the JWT+client-key auth used by the owner-facing app.
+- A `Restaurant` has its own menu (`MenuCategory` → `MenuItem`), slot
+  configuration (`SlotConfiguration`, Lunch/Dinner), seating capacity, and
+  category taxonomy — all admin-manageable, none hard-coded.
+- Customers authenticate via Firebase phone OTP; the backend verifies the ID
+  token server-side and owns its own rotating-refresh-token session — no
+  GoAdapter or third-party identity dependency.
+- A booking requires a **server-verified** Razorpay payment before it can be
+  created, and a transaction-guarded capacity re-check at creation/
+  modification time closes the race window between reading slot
+  availability and writing the booking.
+- `AdminUser` is either `ADMIN` (scoped to specific restaurants via
+  `AdminRestaurant`) or `SUPERADMIN` (manages everything, including other
+  Admins).
 
 ## Deployment
 
 Both packages deploy independently via GitHub Actions on push to `main`:
 
-- **Backend** (`backend-deploy.yml`): builds, applies Prisma migrations, then
-  restarts the API under PM2 on the VPS.
+- **Backend** (`backend-deploy.yml`): installs, generates the Prisma client,
+  validates the schema, runs the test suite, builds, applies
+  `prisma migrate deploy`, then restarts the API under PM2 on the VPS.
 - **Frontend** (`frontend-deploy.yml`): builds static assets and uploads
   `dist/` to the VPS; no server restart needed since it's served as static
   files.

@@ -298,7 +298,7 @@ export function PhoneInput({ value, onChange, required = false }: { value: strin
           aria-expanded={open}
           onClick={(event) => {
             event.stopPropagation();
-            open ? setOpen(false) : openDropdown();
+            if (open) setOpen(false); else openDropdown();
           }}
         >
           <span>{countryCode}</span>

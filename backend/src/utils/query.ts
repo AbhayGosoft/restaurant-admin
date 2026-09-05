@@ -3,7 +3,6 @@ import { z } from "zod";
 export const booleanQueryParam = z.enum(["true", "false"]).transform((value) => value === "true");
 
 export const listQuerySchema = z.object({
-  propertyId: z.string().uuid().optional(),
   search: z.string().trim().optional(),
   isActive: booleanQueryParam.optional(),
   page: z.coerce.number().int().min(1).default(1),

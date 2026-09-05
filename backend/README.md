@@ -1,449 +1,247 @@
-# Backend PMS
+# Restaurant Backend API
 
-Enterprise Stay PMS backend for property owners, stay/property management, rooms, bookings, rate plans, services, and partner adapter integration.
+A standalone Restaurant reservation backend — Firebase phone-auth customers, Razorpay
+booking-advance payments, Restaurant/Menu/Slot management, and Admin/SuperAdmin
+management APIs. Built with Node.js + Express 5 + TypeScript + Prisma 7 + MySQL/MariaDB.
 
-This project is a Node.js + Express + TypeScript backend using Prisma ORM with MySQL/MariaDB.
+This backend was transformed from a Hotel/PMS template. It has **no dependency on
+GoAdapter, hotel/property/room domain models, or any hotel partner APIs** — it owns its
+own authentication, database, and business logic end to end.
 
 ## Tech Stack
 
-- Node.js
-- Express 5
-- TypeScript
-- Prisma 7
-- MySQL / MariaDB
-- Redis
-- Socket.IO
-- BullMQ
-- JWT authentication
-- Zod validation
-- Prisma MariaDB adapter
-
-## Main Features
-
-- Admin and owner authentication
-- Owner onboarding setup wizard
-- Multi-property support
-- Property categories such as `Rooms`, `Halls`, `Dormitories`
-- Room types such as `Standard`, `Luxury`, `RameshHall 30`
-- Physical rooms with room numbers, capacity, bookability, and availability
-- Amenities
-- Services and extra services
-- Rate plans with room type and service mappings
-- Booking lifecycle
-- Live pending-booking confirmation with five-minute auto-cancel
-- Socket.IO rooms by property with Redis adapter support
-- BullMQ queues for booking expiration, adapter sync retries, and notifications
-- Partner adapter APIs under `/api/partner`
-- Backward-compatible partner aliases under `/api/integrations`
-- HMAC-secured adapter APIs under `/api/adapter`
+- Node.js 22, Express 5, TypeScript
+- Prisma 7 + MySQL/MariaDB (via `@prisma/adapter-mariadb`)
+- Redis 6.2+, BullMQ (booking reminder jobs), Socket.IO (Redis adapter)
+- Firebase Admin SDK — verifies customer phone-auth ID tokens server-side
+- Razorpay — booking advance payment (order + signature verification)
+- OneSignal REST API — customer push notifications
+- Zod validation, Pino logging
 
 ## Project Structure
 
 ```text
 src/
-  app.ts
-  server.ts
-  config/
-  adapters/
-  lib/
-  middleware/
-  modules/
-  prisma/
-  queues/
-  redis/
-  repositories/
-  routes/
-  services/
-  socket/
-  types/
-  utils/
-  workers/
-
+  app.ts                Express app + route registration
+  server.ts              HTTP server, Redis/socket/worker lifecycle
+  config/                env.ts, policy.ts (modification cutoff, refund policy)
+  lib/                   prisma, firebaseAdmin, razorpay, oneSignal clients
+  middleware/auth.ts      Admin JWT, Customer JWT, requireRestaurantAccess, requireClientKey
+  constants/               table preference / cancellation reason label maps
+  services/               business logic (one file per domain area)
+  routes/                  customer-facing routes + routes/admin/* admin routes
+  socket/                  Socket.IO server + restaurant:* event names
+  queues/, workers/        BullMQ booking-reminder queue/worker
+  utils/                   geo, dates, slot time formatting, human booking id, http envelope
 prisma/
-  schema.prisma
-  create-admin.ts
-  migrations/
-
-docs/
-  openapi.yaml
-  postman_collection.json
+  schema.prisma            Restaurant domain schema
+  seed.ts                  2 restaurants, SuperAdmin, Admin, menu, slots
+  create-admin.ts          Bootstraps a SuperAdmin from env vars
+tests/
+  unit/                    Pure logic (geo, date/time, refund policy, booking id)
+  integration/             Mocked-Prisma service + route tests (auth boundaries, IDOR,
+                            booking capacity/cutoff/refund, payment verification, refresh rotation)
 ```
 
-## Requirements
+## Domain Model
 
-- Node.js 22.x (LTS) — same version CI and the production server use. Check with `node -v`.
-- npm 10+ (comes bundled with Node 22). Check with `npm -v`.
-- MySQL or MariaDB
-- Redis 6.2+ (older 5.x/6.0 works but logs a version warning on startup)
-
-## Environment Variables
-
-Create a `.env` file in the project root.
-
-```env
-DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/staypms"
-PORT=4000
-NODE_ENV=development
-JWT_SECRET="change-this-long-random-secret-before-production"
-JWT_EXPIRES_IN="7d"
-FRONTEND_ORIGIN="http://localhost:3000,https://localhost,capacitor://localhost"
-REDIS_URL="redis://127.0.0.1:6379"
-LOG_LEVEL="info"
-ADMIN_EMAIL="admin@example.com"
-ADMIN_PASSWORD="change-this-password"
-SAAS_ADAPTER_API_KEY="change-this-adapter-key"
-SAAS_ADAPTER_HMAC_SECRET="change-this-hmac-secret"
-SAAS_ADAPTER_CALLBACK_URL="https://adapter.example.com/webhooks/pms-bookings"
-FIREBASE_PROJECT_ID=""
-FIREBASE_CLIENT_EMAIL=""
-FIREBASE_PRIVATE_KEY=""
-# Or use FIREBASE_SERVICE_ACCOUNT_JSON instead of the three Firebase fields above.
-FIREBASE_SERVICE_ACCOUNT_JSON=""
-APP_CLIENT_KEY="change-this-client-key"
-```
-
-## Running Locally (development machine)
-
-On Windows PowerShell, if script execution blocks `npm` or `npx`, use `npm.cmd` /
-`npx.cmd` instead everywhere below.
-
-### First time only
-
-```bash
-cp .env.example .env      # fill in DATABASE_URL, JWT_SECRET, APP_CLIENT_KEY, etc.
-npm install
-```
-
-Create the database (name must match the one in your `DATABASE_URL`):
-
-```sql
-CREATE DATABASE staypms;
-```
-
-Create and apply migrations, and generate the Prisma Client, in one step:
-
-```bash
-npm run prisma:migrate
-```
-
-Create the admin account from `ADMIN_EMAIL`/`ADMIN_PASSWORD` in `.env`
-(there is no separate seed script in this repo — this is the bootstrap step):
-
-```bash
-npm run create-admin
-```
-
-### Every time after (regular local dev)
-
-Make sure MySQL/MariaDB and Redis are running, then:
-
-```bash
-npm run dev
-```
-
-This uses `tsx watch`, so the server restarts automatically on file changes.
-Default URL: `http://localhost:4000` — health check at `GET /api/health`.
-
-If you change `prisma/schema.prisma` later, re-run `npm run prisma:migrate`
-(creates a new migration file) before `npm run dev` again. `npm run prisma:push`
-is available for quick, throwaway schema experiments that you don't want to
-turn into a migration file yet — don't use it once real data matters, since it
-can't be replayed on the server the way a migration can.
-
-## Running on a Server (production)
-
-Production deploys run automatically via GitHub Actions
-(`.github/workflows/backend-deploy.yml`) on every push to `main`: it SSHes into
-the VPS, pulls the code, and runs the steps below itself. Use the same steps by
-hand only if you're setting up a brand-new server or need to intervene manually.
-
-### First time on a new server
-
-```bash
-git clone <repo> && cd backend
-cp .env.production.example .env   # fill in real production values
-chmod 600 .env
-npm ci
-npm run prisma:generate
-npx prisma migrate deploy         # applies existing migration files, never creates new ones
-npm run build
-pm2 start dist/src/server.js --name connector --cwd .
-pm2 save
-```
-
-### Every time after (redeploy)
-
-Normally you just `git push` to `main` and CI/CD does this for you. The manual
-equivalent, if you ever need it:
-
-```bash
-git pull
-npm ci
-npm run prisma:generate
-npx prisma migrate deploy
-npm run build
-pm2 restart connector --update-env
-```
-
-### Local vs. server — what's different
-
-| | Local (development) | Server (production) |
-|---|---|---|
-| Env file | `.env` copied from `.env.example` | `.env` copied from `.env.production.example` |
-| Install | `npm install` | `npm ci` (exact versions from the lockfile) |
-| Schema sync | `npm run prisma:migrate` (or `prisma:push` for quick experiments) | `npx prisma migrate deploy` only — never `migrate dev` or `db push` |
-| Run | `npm run dev` (tsx watch, auto-restarts) | `npm run build` then PM2 keeps `dist/src/server.js` running |
-| `NODE_ENV` | `development` | `production` |
-
-Start Redis before running the API either way. The server connects Redis, starts
-Socket.IO, and starts BullMQ workers in the same process. In production, run
-multiple API/worker replicas against the same `REDIS_URL`; Socket.IO uses the
-Redis adapter and BullMQ guarantees delayed expiration jobs are coordinated.
-
-## Useful Scripts
-
-```bash
-npm run dev              # start dev server (local only)
-npm run build            # compile TypeScript
-npm start                # run compiled server (node dist/src/server.js, no PM2)
-npm run prisma:generate  # generate Prisma Client
-npm run prisma:migrate   # create/apply a Prisma migration (local only)
-npm run prisma:push      # push schema to database without a migration file (local only)
-npm run create-admin     # create/update the admin user from ADMIN_EMAIL/ADMIN_PASSWORD
-npm test                 # currently runs build
-```
+`RestaurantUser` (customer, Firebase-authenticated) · `AdminUser` (ADMIN/SUPERADMIN,
+scoped to restaurants via `AdminRestaurant`) · `Restaurant` · `RestaurantCategory` /
+`RestaurantCategoryLink` (admin-manageable taxonomy, e.g. `pure_veg`, `north_indian`) ·
+`MenuCategory` → `MenuItem` · `SlotConfiguration` (Lunch/Dinner time slots, admin
+configurable) · `RestaurantBooking` (snapshots restaurant name/image/rating/cuisine/
+distance at booking time so history renders correctly even if the restaurant changes
+later) · `Payment` (Razorpay order/signature verification, independent of whether a
+booking is ever created from it) · `RefreshSession` (rotating customer refresh tokens) ·
+`Notification`.
 
 ## Authentication
 
-Login:
+**Customer** — Firebase Phone OTP on the client → `POST /api/auth/authenticate/` with
+the Firebase ID token. The backend verifies the token server-side via Firebase Admin
+(`firebase-admin/auth`), extracting the trusted UID + phone number — the client's
+`firebase_token` is the only identity input trusted; a client can never assert its own
+phone number, uid, id, or role. A `RestaurantUser` is created or updated (name/email/
+`player_id`) and short-lived (`CUSTOMER_ACCESS_TOKEN_TTL`, default 15m) access + rotating
+refresh tokens are issued. Refresh tokens are opaque random values, stored only as a
+SHA-256 hash in `RefreshSession`, and rotate on every `/api/auth/refresh/` call; reuse of
+an already-rotated token revokes every active session for that user (theft detection).
+`POST /api/auth/logout/` revokes the current refresh session.
 
-```text
-POST /api/auth/login
+**Admin / SuperAdmin** — classic email + bcrypt password login at
+`POST /api/admin/auth/login`, issuing a JWT signed with a **separate secret**
+(`JWT_SECRET`) from the customer token secret (`CUSTOMER_JWT_SECRET`) — an admin token
+and a customer token can never be swapped between APIs even if someone tried, because
+each middleware can only verify tokens signed with its own secret. SuperAdmin manages
+everything; a plain Admin is scoped to specific restaurants via the `AdminRestaurant`
+join table, enforced by `requireRestaurantAccess()` middleware on every restaurant-scoped
+admin route.
+
+## API Endpoints
+
+```
+POST   /api/auth/authenticate/           Firebase login/register (issues tokens)
+POST   /api/auth/refresh/                Rotate refresh token
+POST   /api/auth/logout/                 Revoke refresh session
+
+GET    /api/restaurants/                 ?city&category&q&latitude&longitude&page&limit
+GET    /api/restaurants/:id/             ?latitude&longitude (for distanceKm)
+GET    /api/restaurants/:id/menu/
+GET    /api/restaurants/:id/slots/       ?date=YYYY-MM-DD&people=N
+POST   /api/restaurants/:id/bookings/    [customer auth] verified-payment required
+
+POST   /api/payments/initiate/           [customer auth] server decides the ₹ amount
+POST   /api/payments/verify/             [customer auth] verifies Razorpay HMAC signature
+
+GET    /api/my-restaurant-bookings/      [customer auth] ?filter=upcoming|past
+GET    /api/restaurant-bookings/:id/     [customer auth, ownership enforced]
+PATCH  /api/restaurant-bookings/:id/     [customer auth] date/time/people only
+POST   /api/restaurant-bookings/:id/cancel/  [customer auth]
+
+POST   /api/admin/auth/login
+GET    /api/admin/auth/me
+PATCH  /api/admin/auth/change-password
+
+GET/POST/PATCH/DELETE  /api/admin/restaurants/[:id]      [SuperAdmin: all; Admin: assigned only]
+PATCH  /api/admin/restaurants/:id/rating                 [SuperAdmin only]
+GET/POST/PATCH/DELETE  /api/admin/restaurants/:id/menu/categories[/:categoryId]
+POST/PATCH/DELETE       /api/admin/restaurants/:id/menu/categories/:categoryId/items[/:itemId]
+GET/POST/PATCH/DELETE  /api/admin/restaurants/:id/slots[/:slotId]
+GET/PATCH/DELETE        /api/admin/bookings[/:id][/cancel]
+GET/POST/PATCH/DELETE  /api/admin/admins[/:id]           [SuperAdmin only]
+GET/POST/PATCH/DELETE  /api/admin/categories[/:id]        (global category taxonomy; SuperAdmin writes)
+POST                    /api/uploads/images                [admin auth] banner/gallery/menu images
 ```
 
-Use the returned JWT as:
+All responses use `{ "status": boolean, "message": string, "data"?: ... }`. Every
+`/api/*` route also requires the shared `x-client-key` header when `APP_CLIENT_KEY` is
+configured (defense-in-depth in front of JWT auth, mirrors the original project's
+convention).
 
-```text
-Authorization: Bearer YOUR_TOKEN
-```
+## Payment & Booking Flow
 
-## Core API Groups
+`POST /payments/initiate/` creates a Razorpay order for a **server-decided** amount
+(`RESTAURANT_BOOKING_ADVANCE_INR`, default ₹99) — the client cannot influence the amount.
+`POST /payments/verify/` verifies the Razorpay HMAC-SHA256 signature server-side and
+marks the `Payment` row `VERIFIED`; a signature mismatch marks it `FAILED` and a second
+verify attempt on an already-verified/failed order is rejected. Only then does
+`POST /restaurants/:id/bookings/` accept the booking — it re-validates the payment
+belongs to the caller and hasn't already funded a different booking, then, **inside a
+transaction that row-locks the restaurant (`SELECT ... FOR UPDATE`)**, re-checks slot
+capacity before inserting — closing the race window between the `/slots/` read and the
+booking write so two concurrent bookers can't both claim the last seats.
 
-```text
-/api/auth
-/api/owners
-/api/amenities
-/api/stays
-/api/setup
-/api/categories
-/api/room-types
-/api/rooms
-/api/rate-plans
-/api/services
-/api/bookings
-/api/payments
-/api/settlements
-/api/notifications
-/api/uploads
-/api/room-blocks
-/api/inventory
-/api/partner
-```
+## Reminders & Notifications
 
-## Owner Setup Flow
+Booking confirm/modify/cancel notifications are created (and pushed via OneSignal, and
+emitted over `restaurant:notification:new` on the customer's socket room) synchronously
+within the request. Slot-time reminders are scheduled as a **delayed BullMQ job**
+(`BOOKING_REMINDER_MINUTES_BEFORE` before the slot), rescheduled on modify and cancelled
+on cancel — not a per-booking `setTimeout`, so reminders survive process restarts.
 
-Owners complete a progressive setup flow before they can create bookings:
+## Modification / Cancellation Policy
 
-```text
-CATEGORY -> ROOM_TYPE -> ROOM -> RATE_PLAN -> SERVICE -> COMPLETED
-```
+Centralized in `src/config/policy.ts`, not scattered across controllers:
 
-Setup endpoints:
+- **Modification window**: `BOOKING_MODIFICATION_CUTOFF_MINUTES` (default 60) before the
+  slot time; PATCH is rejected once inside that window.
+- **Refund policy**: full refund of the advance if cancelled outside the same cutoff
+  window, no refund inside it. This is an explicit initial assumption — change it in one
+  place (`decideRefund`) if the real business rule differs.
+- **Booking window**: today through `maxBookingLeadDays` (60) days out, validated
+  server-side on both slot lookup and booking creation/modification.
 
-```text
-GET  /api/setup/progress
-POST /api/setup/finish
-```
+`upcoming` → `past` is computed on every read (comparing the booking's date+time against
+the current instant), not written by a cron job — so it can never go stale regardless of
+when a client last fetched it.
 
-## App Client Key
+## Environment Variables
 
-Every route except `/`, `/api/health`, `/api/partner/*`, `/api/integrations/*`, and
-`/api/adapter/*` requires the web/app frontend's shared secret on each request:
+See `.env.example`. Notably:
 
-```text
-x-client-key: YOUR_APP_CLIENT_KEY
-```
+- `JWT_SECRET` / `CUSTOMER_JWT_SECRET` — **must differ** (see Authentication above).
+- `FIREBASE_PROJECT_ID`/`FIREBASE_CLIENT_EMAIL`/`FIREBASE_PRIVATE_KEY` (or
+  `FIREBASE_SERVICE_ACCOUNT_JSON`) — required for `/auth/authenticate/` to work; without
+  them the endpoint fails closed with a 500, it never falls back to trusting the client.
+- `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` — when unset, payment order creation and
+  signature verification run in a **mock mode** (clearly logged) so the full flow stays
+  testable end-to-end locally without live Razorpay credentials.
+- `ONESIGNAL_APP_ID`/`ONESIGNAL_API_KEY` — when unset, pushes are logged and skipped
+  rather than failing the request (same graceful-degradation pattern the original
+  codebase used for Firebase Cloud Messaging).
 
-This blocks other apps/sites from calling the API directly; it does not replace the
-per-user JWT (`Authorization: Bearer`) auth used on protected routes.
+> **Security note:** `backend/.env.production.example` previously contained what appear
+> to be **real, live secrets** committed to git (a production DB password, a full
+> Firebase service-account private key, and a SAAS adapter API key/HMAC secret) —
+> it has been replaced with a placeholder-only template. If you have deploy access to
+> those systems, rotate that Firebase service account key, the database password, and
+> revoke that adapter API key now; they are exposed in this repo's git history
+> regardless of the file's current content. A local `backend/service_account.json` with
+> the same private key also exists on disk (now `.gitignore`d) — rotate it too before
+> reusing this Firebase project for anything sensitive.
 
-## GoAdapter PMS Contract
-
-The GoAdapter-facing PMS contract is implemented under `/api/partner` and
-mirrored under `/api/integrations` for existing clients. Configure the
-GoAdapter `PMSInstance.base_url` to one of those base paths.
-
-Partner routes use the static API key:
-
-```text
-x-api-key: YOUR_SAAS_ADAPTER_API_KEY
-```
-
-Primary partner base path:
-
-```text
-/api/partner
-```
-
-Backward-compatible alias:
-
-```text
-/api/integrations
-```
-
-Contract endpoints:
-
-```text
-GET  /api/partner/catalog
-GET  /api/partner/property?propertyId=PROPERTY_ID
-GET  /api/partner/property?property_id=PROPERTY_ID
-GET  /api/partner/categories?propertyId=PROPERTY_ID
-GET  /api/partner/categories?property_id=PROPERTY_ID
-GET  /api/partner/room-types?propertyId=PROPERTY_ID
-GET  /api/partner/room-types?property_id=PROPERTY_ID
-GET  /api/partner/rate-plans?propertyId=PROPERTY_ID
-GET  /api/partner/rate-plans?property_id=PROPERTY_ID
-GET  /api/partner/extra-services?propertyId=PROPERTY_ID
-GET  /api/partner/extra-services?property_id=PROPERTY_ID
-GET  /api/partner/availability?property_id=PROPERTY_ID&date_from=2026-08-01&date_to=2026-08-03
-POST /api/partner/bookings
-GET  /api/partner/bookings/:pms_booking_id
-POST /api/partner/bookings/:pms_booking_id/cancel
-```
-
-Responses follow the documented GoAdapter PMS integration contract:
-
-- Property sends PMS-owned descriptive data only.
-- Room types send PMS-owned inventory/catalog fields.
-- Rate plans return one flat row per `(rate_plan_id, room_type_id)`.
-- Extra services return numeric `price` and `tax_rate`.
-- Availability returns one row per room type per date with numeric `price`.
-- Booking responses return `pms_booking_id`, `status`, and `price`.
-
-Booking status mapping for GoAdapter polling:
-
-```text
-PENDING -> pending
-CONFIRMED -> confirmed
-CANCELLED / REJECTED / AUTO_CANCELLED / EXPIRED -> cancelled
-COMPLETED -> checked_out
-```
-
-`POST /api/partner/bookings/:pms_booking_id/cancel` is treated as a
-GoAdapter-requested cancellation, so it updates this PMS but does not send a
-webhook back to GoAdapter for the same cancellation.
-
-The optional internal adapter-control API is HMAC protected:
-
-```text
-POST /api/adapter/bookings
-POST /api/adapter/bookings/:id/confirm
-POST /api/adapter/bookings/:id/cancel
-```
-
-For each request, send:
-
-```text
-x-timestamp: 1785400000000
-x-signature: sha256=HEX_HMAC_SHA256
-```
-
-The signature payload is `timestamp + "." + rawJsonBody`, signed with
-`SAAS_ADAPTER_HMAC_SECRET`. Timestamps are accepted within a five-minute window.
-This API is not required by `pms-integration-api.yaml`; it is available for
-trusted internal adapter automation.
-
-## Live Booking Workflow
-
-New adapter bookings are stored as `PENDING` with `expiresAt = createdAt + 5 minutes`.
-Pending metadata is stored in Redis and a delayed `booking-expiration` job is queued.
-
-When a booking is confirmed, rejected, cancelled, or auto-cancelled:
-
-- The change runs in a Prisma transaction.
-- The `version` field is checked and incremented for optimistic locking.
-- A `BookingEvent` audit record is written.
-- Pending Redis metadata is removed.
-- Socket.IO emits `booking:confirmed`, `booking:cancelled`, or `booking:expired`.
-- BullMQ enqueues adapter webhook sync and notification work with exponential retry.
-
-Socket.IO authenticates with the same JWT used by REST. Owners are joined to
-`property:{propertyId}` rooms and admins also join `admin`.
-
-When `SAAS_ADAPTER_CALLBACK_URL` is configured, set it to GoAdapter's
-`POST /webhooks/{webhook_code}/` URL. Outbound payloads use the documented
-shape: `pms_booking_id`, `event_type`, and `occurred_at`.
-
-## Android Push Notifications
-
-Closed-app Android notifications use Firebase Cloud Messaging. Configure one
-of these backend credential styles:
-
-```env
-FIREBASE_SERVICE_ACCOUNT_JSON='{"project_id":"...","client_email":"...","private_key":"..."}'
-```
-
-or:
-
-```env
-FIREBASE_PROJECT_ID="your-project-id"
-FIREBASE_CLIENT_EMAIL="firebase-adminsdk-..."
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-```
-
-Mobile devices register FCM tokens at:
-
-```text
-POST /api/notifications/devices
-DELETE /api/notifications/devices/:token
-```
-
-If Firebase credentials are missing, realtime Socket.IO notifications continue
-to work while the app is open, and the backend logs that push delivery was
-skipped.
-
-## Data Model Notes
-
-- One owner can have many properties.
-- Each property owns its categories, room types, rooms, rate plans, services, amenities, and availability.
-- Room types are sellable inventory groups.
-- Rooms are physical bookable units.
-- Halls are modeled as room types with larger capacity and physical room records underneath.
-- Rate plans can map to many room types.
-- Services can map to room types and rate plans.
-- Availability is calculated live from active/bookable rooms and date-level room availability records.
-
-## Verification
-
-Recommended checks before committing changes:
+## Running Locally
 
 ```bash
-npx prisma validate
-npm run build
+cd backend
+cp .env.example .env         # fill in DATABASE_URL at minimum; Firebase/Razorpay/OneSignal
+                              # can stay blank for local testing (see mock-mode notes above)
+npm install
+npm run prisma:generate
+npm run prisma:migrate        # applies prisma/migrations/20260822000000_init
+npm run db:seed               # 2 restaurants, SuperAdmin, Admin, menu, slots
+npm run dev                   # http://localhost:4000
 ```
 
-On Windows PowerShell:
+Requires a reachable MySQL/MariaDB server and Redis 6.2+ (`REDIS_URL`, default
+`redis://127.0.0.1:6379`). `npm run create-admin` (env-driven `SUPERADMIN_EMAIL`/
+`SUPERADMIN_PASSWORD`) is an alternative to seeding when you only need a SuperAdmin
+without sample restaurant data.
+
+Seeded logins (also printed by `npm run db:seed`):
+
+- SuperAdmin: value of `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` in `.env` (defaults to
+  `admin@gmail.com` / `123123` if unset — **change these before any shared deployment**)
+- Admin: `manager@restaurant.local` / `Manager@12345` (scoped to "Shree Shyam Restaurant")
+
+## Testing
 
 ```bash
-npx.cmd prisma validate
-npm.cmd run build
+npm test          # vitest run — unit + mocked-Prisma integration tests, no live DB needed
+npm run test:watch
 ```
 
-## Production Checklist
+Tests never touch a real database — Prisma is mocked (`tests/helpers/mockPrisma.ts`) so
+the suite is hermetic and fast. Coverage includes: cross-audience token rejection (a
+customer token can't be replayed on an admin route or vice versa), IDOR protection on
+booking access, SuperAdmin-only route enforcement, refresh-token rotation and reuse
+detection, booking capacity/date-window/cutoff/refund logic, and Razorpay
+signature/duplicate-verification handling.
 
-- Change `JWT_SECRET` before production.
-- Change `ADMIN_EMAIL`/`ADMIN_PASSWORD` before production.
-- Keep `SAAS_ADAPTER_API_KEY` and `SAAS_ADAPTER_HMAC_SECRET` private.
-- Configure CORS using `FRONTEND_ORIGIN`.
-- Set `APP_CLIENT_KEY` and keep the frontend's `VITE_CLIENT_KEY` in sync with it —
-  a mismatch here makes every frontend request fail with "Invalid client key".
+## Example Requests
+
+**Authenticate**
+```http
+POST /api/auth/authenticate/
+{ "firebase_token": "<Firebase ID token>", "name": "Rahul Sharma", "player_id": "..." }
+→ { "status": true, "message": "Login successful",
+    "data": { "access_token": "...", "refresh_token": "...", "user": { ... } } }
+```
+
+**Create a booking** (after `/payments/initiate/` → checkout → `/payments/verify/`)
+```http
+POST /api/restaurants/:id/bookings/
+Authorization: Bearer <customer access token>
+{
+  "date": "2026-08-25", "time": "12:00 PM", "people": 4,
+  "tablePreference": "Window Seat", "fullName": "Rahul Sharma",
+  "mobileNumber": "+919876543210",
+  "payment": { "razorpay_order_id": "...", "razorpay_payment_id": "..." }
+}
+```
+
+## Deployment
+
+Unchanged from the original project's PM2/GitHub Actions setup
+(`.github/workflows/backend-deploy.yml`): build → `prisma migrate deploy` → restart under
+PM2. No GoAdapter callback/webhook configuration is needed anymore.

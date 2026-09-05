@@ -1,49 +1,32 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma } from "../lib/prisma.js";
-import { requireAuth } from "../middleware/auth.js";
-import { ApiError, asyncHandler, validateBody } from "../utils/http.js";
+import { requireCustomerAuth } from "../middleware/auth.js";
+import { initiatePayment, verifyPayment } from "../services/paymentService.js";
+import { asyncHandler, sendSuccess, validateBody } from "../utils/http.js";
 
 const router = Router();
-
-router.use(requireAuth);
+router.use(requireCustomerAuth);
 
 router.post(
-  "/",
+  "/initiate",
   asyncHandler(async (req, res) => {
-    const body = validateBody(
-      z.object({
-        bookingId: z.string().uuid(),
-        amount: z.coerce.number().positive(),
-        paymentMode: z.enum(["CASH", "UPI", "CARD", "BANK_TRANSFER", "OTHER"]),
-        transactionRef: z.string().optional(),
-        status: z.enum(["SUCCESS", "PENDING", "FAILED", "REFUNDED"]).default("SUCCESS"),
-      }),
-      req.body,
-    );
+    const order = await initiatePayment(req.customer!.id);
+    sendSuccess(res, order, "Payment order created");
+  }),
+);
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: body.bookingId },
-      include: { stayProfile: true },
-    });
-    if (!booking) throw new ApiError(404, "Booking not found");
-    if (req.user!.role !== "ADMIN" && booking.stayProfile.ownerId !== req.user!.id) {
-      throw new ApiError(403, "You cannot add payment for this booking");
-    }
+const verifySchema = z.object({
+  razorpay_order_id: z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature: z.string().min(1),
+});
 
-    const payment = await prisma.payment.create({ data: body });
-    const paidSum = await prisma.payment.aggregate({
-      where: { bookingId: body.bookingId, status: "SUCCESS" },
-      _sum: { amount: true },
-    });
-    const paid = Number(paidSum._sum.amount ?? 0);
-    const total = Number(booking.totalAmount);
-    await prisma.booking.update({
-      where: { id: body.bookingId },
-      data: { paymentStatus: paid >= total ? "PAID" : paid > 0 ? "PARTIAL" : "UNPAID" },
-    });
-
-    res.status(201).json(payment);
+router.post(
+  "/verify",
+  asyncHandler(async (req, res) => {
+    const body = validateBody(verifySchema, req.body);
+    const payment = await verifyPayment(req.customer!.id, body);
+    sendSuccess(res, payment, "Payment verified");
   }),
 );
 

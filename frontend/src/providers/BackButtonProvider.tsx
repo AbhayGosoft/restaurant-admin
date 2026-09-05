@@ -20,12 +20,12 @@ export function BackButtonProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Switching between the owner/property picker and the workspace happens via app
-      // state (activeProperty), not the URL, so browser history has nothing to go back
-      // to here — without this, back on the dashboard's "/" would exit the app instead
-      // of returning to the picker.
-      const { activeProperty, exitWorkspace } = useAppStore.getState();
-      if (activeProperty) {
+      // Switching between the restaurant picker and the workspace happens via app state
+      // (activeRestaurant), not the URL, so browser history has nothing to go back to
+      // here — without this, back on the dashboard's "/" would exit the app instead of
+      // returning to the picker.
+      const { activeRestaurant, exitWorkspace } = useAppStore.getState();
+      if (activeRestaurant) {
         exitWorkspace();
         return;
       }

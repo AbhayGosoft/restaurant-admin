@@ -1,585 +1,120 @@
-# Darshan PMS Mobile Frontend
+# Restaurant Admin Frontend
 
-Mobile-first Property Management System (PMS) built with:
+Web + Android admin dashboard for restaurant Admins and SuperAdmins — manage
+restaurants, menus, slot availability, and customer bookings. Built with:
 
-- React 19
-- TypeScript
-- Vite
-- TanStack Query
-- Zustand
-- Socket.IO
-- Capacitor Android
+- React 19, TypeScript, Vite
+- TanStack Query, Zustand
+- Socket.IO client (live booking updates)
+- Capacitor (packages the same web app as an Android app)
 
----
+This was transformed from a Hotel PMS admin dashboard. It talks to the
+Restaurant backend's `/api/admin/*` and shared endpoints only — there is no
+customer-facing UI here (customers use their own Firebase-authenticated app;
+see `backend/README.md`).
 
-# Requirements
+## Project Structure
 
-Install the following software before starting:
-
-- Node.js 22.x LTS
-- npm 10+
-- Java JDK 21
-- Android SDK
-- Android Platform Tools
-- Android Build Tools
-- Git
-
-Verify installation:
-
-```bash
-node -v
-npm -v
-java -version
-javac -version
+```text
+src/
+  app/App.tsx              Route tree (login gate -> restaurant picker -> workspace)
+  components/layout/        WorkspaceShell (sidebar/topbar nav)
+  components/resource/       dialog-kit.tsx (generic form/dialog/image-upload toolkit)
+  components/ui/            Button, DateInput, PasswordInput, StateView
+  features/
+    auth/LoginPage.tsx        Admin/SuperAdmin email+password login
+    restaurants/               Restaurant picker (enter workspace) + SuperAdmin create/list
+    dashboard/                 Stats + recent bookings for the active restaurant
+    bookings/                  Booking list/filter/detail/cancel
+    settings/                  General (restaurant profile), Menu, Slots,
+                                Categories (SuperAdmin-only global taxonomy)
+    admins/                    SuperAdmin: manage AdminUsers + restaurant assignment
+    profile/                   Own account + change password
+  providers/                  SocketProvider, BackButtonProvider (Capacitor back button)
+  lib/api-client.ts            Unwraps the backend's {status,message,data} envelope
+  store/app-store.ts            adminToken/admin/activeRestaurant session (persisted)
+  socket/                      restaurant:booking:* / restaurant:notification:new events
 ```
 
-Java output must be **21.x**.
-
----
-
-# Clone Repository
-
-```bash
-git clone <repository-url>
-
-cd frontend
-```
-
----
-
-# Install Dependencies
-
-```bash
-npm install
-```
-
----
-
-# Environment
-
-The repository already contains:
-
-```
-.env.production
-```
-
-For local development copy:
+## Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Update the following values if required:
-
 ```env
 VITE_API_URL=http://localhost:4000/api
 VITE_API_PROXY_TARGET=http://localhost:4000
-VITE_CLIENT_KEY=change-this-client-key
+VITE_CLIENT_KEY=change-this-client-key   # must match backend APP_CLIENT_KEY
 ```
 
-> **Important**
->
-> `VITE_CLIENT_KEY` **must match** the backend `APP_CLIENT_KEY`.
->
-> If they do not match, every API request will fail with **Invalid client key**.
+## Running Locally
 
----
-
-# Running Local Development
-
-Start the backend first.
-
-Then run:
-
-```bash
-npm run dev
-```
-
-Application will be available at:
-
-```
-http://localhost:5173
-```
-
-Vite automatically reloads after every code change.
-
----
-
-# Production Build
-
-Generate production assets:
-
-```bash
-npm run build
-```
-
-Output:
-
-```
-dist/
-```
-
----
-
-# Android Setup
-
-Whenever frontend code changes:
-
-```bash
-npm run build
-
-npx cap sync android
-```
-
-This copies the latest React build into the Android project.
-
----
-
-# Generate Debug APK
-
-```bash
-cd android
-
-./gradlew assembleDebug
-```
-
-APK Location:
-
-```
-android/app/build/outputs/apk/debug/app-debug.apk
-```
-
----
-
-# Generate Release APK
-
-```bash
-cd android
-
-./gradlew assembleRelease
-```
-
-APK Location:
-
-```
-android/app/build/outputs/apk/release/
-```
-
----
-
-# Generate Play Store Bundle (AAB)
-
-```bash
-cd android
-
-./gradlew bundleRelease
-```
-
-Output:
-
-```
-android/app/build/outputs/bundle/release/
-```
-
----
-
-# First Time Android Setup
-
-If Android has never been configured on the machine:
-
-Install:
-
-- Java JDK 21
-- Android SDK
-- Android Platform Tools
-- Android Build Tools
-
-Accept Android SDK licenses:
-
-```bash
-sdkmanager --licenses
-```
-
-Verify SDK path:
-
-```
-frontend/android/local.properties
-```
-
-Example:
-
-```
-sdk.dir=C:\\Android
-```
-
----
-
-# First Time Project Setup
-
-```bash
-git clone <repository>
-
-cd frontend
-
-npm install
-
-npm run build
-
-npx cap sync android
-
-cd android
-
-./gradlew assembleDebug
-```
-
----
-
-# Daily Development Workflow
-
-Start development:
-
-```bash
-npm run dev
-```
-
-Whenever you want a new APK:
-
-```bash
-npm run build
-
-npx cap sync android
-
-cd android
-
-./gradlew assembleDebug
-```
-
----
-
-# Useful Commands
-
-Install packages
+Start the backend first (see `backend/README.md`), then:
 
 ```bash
 npm install
+npm run dev      # http://localhost:3000
 ```
 
-Development
+## Auth & Session
+
+Login (`POST /admin/auth/login`) stores `{ adminToken, admin }` in
+`localStorage` under `restaurant-admin-session`. A plain `Admin` sees only
+restaurants they're assigned to (`AdminRestaurant`); a `SUPERADMIN` sees and
+manages everything, plus the "Admins" section for creating/assigning other
+admins. Selecting a restaurant sets `activeRestaurant`, which scopes every
+`/admin/restaurants/:id/...` call afterward.
+
+## Live Updates
+
+After login the app opens a Socket.IO connection authenticated with the
+admin JWT. These events invalidate the bookings query so the list refreshes
+without a manual reload:
+
+```
+restaurant:booking:new
+restaurant:booking:modified
+restaurant:booking:cancelled
+```
+
+> The previous Hotel PMS version of this app used Firebase Cloud Messaging
+> (Capacitor Push Notifications) for admin-side push alerts. That backend
+> endpoint (`PushDevice`/FCM) was removed as part of the Hotel→Restaurant
+> transformation — customer push now goes through OneSignal on the backend,
+> and admin-side real-time updates rely on the Socket.IO connection above.
+> Re-add FCM here only if admin push notifications become a requirement.
+
+## Production Build
 
 ```bash
-npm run dev
+npm run build   # outputs dist/
 ```
 
-Build
+## Android (Capacitor)
 
-```bash
-npm run build
-```
-
-Sync Android
-
-```bash
-npx cap sync android
-```
-
-Open Android Studio (optional)
-
-```bash
-npm run android:open
-```
-
-Clean Android
-
-```bash
-cd android
-
-./gradlew clean
-```
-
-Generate APK
-
-```bash
-./gradlew assembleDebug
-```
-
-Generate Release
-
-```bash
-./gradlew assembleRelease
-```
-
-Generate AAB
-
-```bash
-./gradlew bundleRelease
-```
-
----
-
-# Project Structure
-
-```
-frontend
-│
-├── android/
-├── src/
-│   ├── app/
-│   ├── components/
-│   ├── features/
-│   ├── hooks/
-│   ├── lib/
-│   ├── providers/
-│   ├── services/
-│   ├── socket/
-│   ├── store/
-│   ├── styles/
-│   └── types/
-│
-├── package.json
-├── vite.config.ts
-├── capacitor.config.ts
-├── .env.example
-└── .env.production
-```
-
----
-
-# Architecture
-
-```
-React Source
-
-        │
-
-        ▼
-
-npm run build
-
-        │
-
-        ▼
-
-dist/
-
-        │
-
-        ▼
-
-npx cap sync android
-
-        │
-
-        ▼
-
-android/app/src/main/assets/public
-
-        │
-
-        ▼
-
-Gradle Build
-
-        │
-
-        ▼
-
-APK
-
-        │
-
-        ▼
-
-Android Device
-```
-
----
-
-# Live Booking
-
-After login the application opens a Socket.IO connection.
-
-The following events automatically refresh booking data:
-
-```
-booking:new
-
-booking:confirmed
-
-booking:cancelled
-
-booking:expired
-
-notification:new
-
-room:update
-```
-
-Pending bookings are automatically reloaded:
-
-```
-GET /api/bookings?status=PENDING
-```
-
----
-
-# Push Notifications
-
-Android notifications use:
-
-- Firebase Cloud Messaging
-- Capacitor Push Notifications
-
-Setup:
-
-1. Create Firebase Android App
-2. Download:
-
-```
-google-services.json
-```
-
-3. Copy to:
-
-```
-frontend/android/app/google-services.json
-```
-
-4. Configure backend Firebase credentials.
-
-5. Sync Android:
-
-```bash
-npm run android:sync
-```
-
----
-
-# Production Deployment
-
-Deployment is fully automated.
-
-Every push to:
-
-```
-main
-```
-
-automatically:
-
-- Installs dependencies
-- Builds React
-- Generates production assets
-- Uploads `dist/`
-- Deploys to VPS
-
-Workflow:
-
-```
-.github/workflows/frontend-deploy.yml
-```
-
-No server restart is required because production serves static files.
-
----
-
-# Common Issues
-
-## Java Version Error
-
-Check:
-
-```bash
-java -version
-
-javac -version
-```
-
-Expected:
-
-```
-Java 21
-```
-
----
-
-## Android SDK Not Found
-
-Verify:
-
-```
-frontend/android/local.properties
-```
-
-Example:
-
-```
-sdk.dir=C:\\Android
-```
-
----
-
-## Build Failed
-
-Clean Android build:
-
-```bash
-cd android
-
-./gradlew clean
-```
-
-Then build again:
-
-```bash
-./gradlew assembleDebug
-```
-
----
-
-## API Requests Failing
-
-Verify:
-
-- Backend is running.
-- `VITE_API_URL` is correct.
-- `VITE_CLIENT_KEY` matches backend `APP_CLIENT_KEY`.
-
----
-
-# Notes
-
-- Never edit files inside:
-
-```
-android/app/src/main/assets/public
-```
-
-These files are automatically generated.
-
-- Always run:
+Unchanged from the original project — the same web build is packaged as an
+Android app:
 
 ```bash
 npm run build
-```
-
-before:
-
-```bash
 npx cap sync android
+cd android && ./gradlew assembleDebug   # -> android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- Rebuild the APK after every frontend change.
+Requires Java JDK 21 and the Android SDK/Platform Tools/Build Tools;
+`android/local.properties` must point `sdk.dir` at your SDK install. Run
+`npm run android:open` to open the project in Android Studio instead.
 
----
+## Deployment
 
-# Tech Stack
+Unchanged: every push to `main` touching `frontend/**` builds and uploads
+`dist/` to the VPS via `.github/workflows/frontend-deploy.yml`. No server
+restart needed — it's served as static files.
 
-- React
-- TypeScript
-- Vite
-- Capacitor
-- Android
-- TanStack Query
-- Zustand
-- Socket.IO
-- Firebase Cloud Messaging
+## Common Issues
+
+- **API requests failing** — confirm the backend is running, `VITE_API_URL`
+  is correct, and `VITE_CLIENT_KEY` matches the backend's `APP_CLIENT_KEY`.
+- **401 on every request** — the admin JWT expired or `adminToken` is stale;
+  sign out and back in.

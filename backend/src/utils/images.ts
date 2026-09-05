@@ -10,8 +10,8 @@ export const imageUrlSchema = z.string().refine(
 );
 
 // Stored image values are either already-absolute URLs (pasted by a user) or backend-relative
-// upload paths like "/uploads/images/x.jpg". External consumers (GoAdapter) can't resolve the
-// latter, so anything returned to them must go through this first.
+// upload paths like "/uploads/images/x.jpg". Clients on a different origin (the admin web app,
+// the Capacitor Android build) can't resolve the latter, so it must go through this first.
 export function resolveAssetUrl(path: string): string;
 export function resolveAssetUrl(path: string | null | undefined): string | undefined;
 export function resolveAssetUrl(path: string | null | undefined): string | undefined {

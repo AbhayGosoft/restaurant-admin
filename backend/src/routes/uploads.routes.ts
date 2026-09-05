@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { Router } from "express";
 import multer from "multer";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAdminAuth } from "../middleware/auth.js";
 import { ApiError, asyncHandler } from "../utils/http.js";
 
 const router = Router();
@@ -36,7 +36,7 @@ const upload = multer({
   },
 });
 
-router.use(requireAuth);
+router.use(requireAdminAuth);
 
 router.post(
   "/images",

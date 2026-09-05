@@ -5,171 +5,141 @@ import { Save } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { queryClient } from "@/lib/query-client";
 import { useAppStore } from "@/store/app-store";
-import type { Stay, StayImage } from "@/types/domain";
+import type { Restaurant, RestaurantCategory } from "@/types/domain";
 import { Button } from "@/components/ui/Button";
 import { LoadingGrid, StateView } from "@/components/ui/StateView";
-import { FieldError, ImageManager, PhoneField, Req, cleanBody, normalizeCover } from "@/components/resource/dialog-kit";
-import { MapPicker } from "@/components/resource/MapPicker";
+import { CheckboxList, FieldError, ImageManager, PhoneField, Req, cleanBody, normalizeCover } from "@/components/resource/dialog-kit";
 
 type GeneralForm = {
   name: string;
-  type: string;
-  description: string;
-  cancellationPolicy: string;
-  houseRules: string;
+  cuisineLabel: string;
+  isPureVeg: boolean;
+  prepTimeMin: number;
+  prepTimeMax: number;
+  priceForTwo: number;
+  offerText: string;
+  offerSubText: string;
+  about: string;
   addressLine: string;
-  addressLine2: string;
   city: string;
   state: string;
   country: string;
   pincode: string;
-  latitude?: number;
-  longitude?: number;
-  contactNumber: string;
-  website: string;
-  starRating: string;
-  checkInTime: string;
-  checkOutTime: string;
-  taxesIncluded: boolean;
-  taxPercent: string;
-  cancellationFeePercent: string;
-  facilities: string;
+  latitude: number;
+  longitude: number;
+  phone: string;
+  seatingCapacity: number;
+  maxPartySize: number;
 };
 
 const emptyForm: GeneralForm = {
-  name: "",
-  type: "HOMESTAY",
-  description: "",
-  cancellationPolicy: "",
-  houseRules: "",
-  addressLine: "",
-  addressLine2: "",
-  city: "",
-  state: "",
-  country: "India",
-  pincode: "",
-  latitude: undefined,
-  longitude: undefined,
-  contactNumber: "",
-  website: "",
-  starRating: "",
-  checkInTime: "12:00",
-  checkOutTime: "10:00",
-  taxesIncluded: false,
-  taxPercent: "",
-  cancellationFeePercent: "",
-  facilities: "",
+  name: "", cuisineLabel: "", isPureVeg: false, prepTimeMin: 20, prepTimeMax: 35,
+  priceForTwo: 0, offerText: "", offerSubText: "", about: "", addressLine: "",
+  city: "", state: "", country: "India", pincode: "", latitude: 0, longitude: 0,
+  phone: "", seatingCapacity: 40, maxPartySize: 12,
 };
 
 export function GeneralSettingsPage() {
-  const propertyId = useAppStore((state) => state.activeProperty!.id);
-  const enterProperty = useAppStore((state) => state.enterProperty);
-  const activeOwner = useAppStore((state) => state.activeOwner);
-  const property = useQuery({ queryKey: ["property", propertyId], queryFn: () => api<Stay>(`/stays/${propertyId}`) });
-  const [images, setImages] = useState<StayImage[]>([]);
+  const restaurantId = useAppStore((state) => state.activeRestaurant!.id);
+  const enterRestaurant = useAppStore((state) => state.enterRestaurant);
+  const restaurant = useQuery({ queryKey: ["admin-restaurant", restaurantId], queryFn: () => api<Restaurant>(`/admin/restaurants/${restaurantId}`) });
+  const categories = useQuery({ queryKey: ["restaurant-categories"], queryFn: () => api<RestaurantCategory[]>("/admin/categories") });
+  const [banner, setBanner] = useState<{ imageUrl: string; sortOrder: number }[]>([]);
+  const [gallery, setGallery] = useState<{ imageUrl: string; sortOrder: number }[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
-  const { register, control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<GeneralForm>({ defaultValues: emptyForm });
-  const latitude = watch("latitude");
-  const longitude = watch("longitude");
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<GeneralForm>({ defaultValues: emptyForm });
 
   useEffect(() => {
-    if (!property.data) return;
-    const stay = property.data;
+    if (!restaurant.data) return;
+    const r = restaurant.data;
     reset({
-      name: stay.name, type: stay.type, description: stay.description ?? "",
-      cancellationPolicy: stay.cancellationPolicy ?? "", houseRules: stay.houseRules ?? "",
-      addressLine: stay.addressLine,
-      addressLine2: stay.addressLine2 ?? "",
-      city: stay.city, state: stay.state, country: stay.country, pincode: stay.pincode,
-      latitude: stay.latitude !== undefined && stay.latitude !== null ? Number(stay.latitude) : undefined,
-      longitude: stay.longitude !== undefined && stay.longitude !== null ? Number(stay.longitude) : undefined,
-      contactNumber: stay.contactNumber, website: stay.website ?? "", starRating: stay.starRating ? String(stay.starRating) : "",
-      checkInTime: stay.checkInTime, checkOutTime: stay.checkOutTime,
-      taxesIncluded: stay.taxesIncluded ?? false,
-      taxPercent: stay.taxPercent !== undefined && stay.taxPercent !== null ? String(stay.taxPercent) : "",
-      cancellationFeePercent: stay.cancellationFeePercent !== undefined && stay.cancellationFeePercent !== null ? String(stay.cancellationFeePercent) : "",
-      facilities: (stay.facilities ?? []).join(", "),
+      name: r.name, cuisineLabel: r.cuisineLabel, isPureVeg: r.isPureVeg,
+      prepTimeMin: r.prepTimeMin, prepTimeMax: r.prepTimeMax, priceForTwo: r.priceForTwo,
+      offerText: r.offerText ?? "", offerSubText: r.offerSubText ?? "", about: r.about ?? "",
+      addressLine: r.addressLine ?? r.address?.line ?? "",
+      city: r.city ?? r.address?.city ?? "",
+      state: r.state ?? r.address?.state ?? "",
+      country: r.country ?? r.address?.country ?? "India",
+      pincode: r.pincode ?? r.address?.pincode ?? "",
+      latitude: r.latitude, longitude: r.longitude, phone: r.phone,
+      seatingCapacity: r.seatingCapacity ?? 40, maxPartySize: r.maxPartySize,
     });
-    setImages(stay.images ?? []);
-  }, [property.data, reset]);
+    setBanner(r.banner ? [{ imageUrl: r.banner, sortOrder: 0 }] : []);
+    setGallery(r.gallery.map((imageUrl, sortOrder) => ({ imageUrl, sortOrder })));
+  }, [restaurant.data, reset]);
 
-  const pickLocation = (lat: number, lng: number) => {
-    setValue("latitude", lat, { shouldDirty: true });
-    setValue("longitude", lng, { shouldDirty: true });
-  };
+  useEffect(() => {
+    if (!restaurant.data || !categories.data) return;
+    const keySet = new Set(restaurant.data.categories);
+    setSelectedCategoryIds(categories.data.filter((category) => keySet.has(category.key)).map((category) => category.id));
+  }, [restaurant.data, categories.data]);
 
   const mutation = useMutation({
     mutationFn: (data: GeneralForm) =>
-      api<Stay>(`/stays/${propertyId}`, {
+      api<Restaurant>(`/admin/restaurants/${restaurantId}`, {
         method: "PATCH",
         body: cleanBody({
           ...data,
-          facilities: data.facilities.split(",").map((facility) => facility.trim()).filter(Boolean),
-          images: images.map(({ imageUrl, isCover }, sortOrder) => ({ imageUrl, isCover, sortOrder })),
+          banner: banner[0]?.imageUrl,
+          gallery: gallery.map((image) => image.imageUrl),
+          categoryIds: selectedCategoryIds,
         }),
       }),
     onSuccess: async (updated) => {
-      await queryClient.invalidateQueries({ queryKey: ["property", propertyId] });
-      enterProperty(activeOwner, { id: updated.id, name: updated.name, type: updated.type });
+      await queryClient.invalidateQueries({ queryKey: ["admin-restaurant", restaurantId] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-restaurants"] });
+      enterRestaurant({ id: updated.id, name: updated.name, banner: updated.banner });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     },
   });
 
-  if (property.isLoading) return <LoadingGrid />;
-  if (property.isError) return <StateView title="Couldn't load property" message="Check the backend connection and try once more." action={() => void property.refetch()} />;
+  if (restaurant.isLoading) return <LoadingGrid />;
+  if (restaurant.isError) return <StateView title="Couldn't load restaurant" message="Check the backend connection and try once more." action={() => void restaurant.refetch()} />;
 
   return (
     <form className="settings-form" noValidate onSubmit={handleSubmit((data) => mutation.mutate(data))}>
       <div className="property-form-grid">
-        <div className="property-form-grid__wide"><ImageManager images={images} onChange={(next) => setImages(normalizeCover(next).map((image) => ({ ...image, isCover: Boolean(image.isCover) })))} supportsCover /></div>
-        <label><span className="label-title">Property name<Req /></span>
-          <input {...register("name", { required: "Property name is required", minLength: { value: 2, message: "Enter at least 2 characters" } })} />
+        <div className="property-form-grid__wide">
+          <span className="label-title">Banner image</span>
+          <ImageManager images={banner} onChange={(next) => setBanner(next.slice(-1).map((image, sortOrder) => ({ imageUrl: image.imageUrl, sortOrder })))} />
+        </div>
+        <div className="property-form-grid__wide">
+          <span className="label-title">Gallery images</span>
+          <ImageManager images={gallery} onChange={(next) => setGallery(normalizeCover(next, false))} />
+        </div>
+        <label><span className="label-title">Restaurant name<Req /></span>
+          <input {...register("name", { required: "Restaurant name is required", minLength: { value: 2, message: "Enter at least 2 characters" } })} />
           <FieldError error={errors.name} />
         </label>
-        <label>Property type<select {...register("type")}><option value="HOMESTAY">Homestay</option><option value="DHARAMSHALA">Dharamshala</option><option value="AIRBNB">Airbnb</option><option value="HOTEL">Hotel</option><option value="RESORT">Resort</option><option value="ASHRAM">Ashram</option><option value="OTHER">Other</option></select></label>
-        <label className="property-form-grid__wide">Description<textarea rows={3} {...register("description")} /></label>
-        <label className="property-form-grid__wide">Cancellation policy<textarea rows={3} placeholder="Describe cancellation terms for guests" {...register("cancellationPolicy")} /></label>
-        <label className="property-form-grid__wide">House rules<textarea rows={3} placeholder="Describe house rules for guests" {...register("houseRules")} /></label>
+        <label><span className="label-title">Cuisine label<Req /></span>
+          <input placeholder="Pure Veg • North Indian • Chinese" {...register("cuisineLabel", { required: "Cuisine label is required" })} />
+          <FieldError error={errors.cuisineLabel} />
+        </label>
+        <label className="check-option"><input type="checkbox" {...register("isPureVeg")} /><span>Pure vegetarian restaurant</span></label>
+        {categories.data && (
+          <CheckboxList title="Categories" items={categories.data.map((c) => ({ id: c.id, label: c.label }))} selected={selectedCategoryIds} onChange={setSelectedCategoryIds} />
+        )}
+        <label className="property-form-grid__wide">About<textarea rows={3} {...register("about")} /></label>
+        <label><span className="label-title">Prep time min (mins)<Req /></span><input type="number" min={0} {...register("prepTimeMin", { required: true, valueAsNumber: true })} /></label>
+        <label><span className="label-title">Prep time max (mins)<Req /></span><input type="number" min={0} {...register("prepTimeMax", { required: true, valueAsNumber: true })} /></label>
+        <label><span className="label-title">Price for two (₹)<Req /></span><input type="number" min={0} {...register("priceForTwo", { required: true, valueAsNumber: true })} /></label>
+        <label>Offer text<input placeholder="50% OFF" {...register("offerText")} /></label>
+        <label>Offer sub text<input placeholder="up to ₹100 on first order" {...register("offerSubText")} /></label>
         <label className="property-form-grid__wide"><span className="label-title">Address<Req /></span>
-          <input {...register("addressLine", { required: "Address is required", minLength: { value: 2, message: "Enter at least 2 characters" } })} />
+          <input {...register("addressLine", { required: "Address is required" })} />
           <FieldError error={errors.addressLine} />
         </label>
-        <label className="property-form-grid__wide">Address line 2<input {...register("addressLine2")} /></label>
-        <label className="property-form-grid__wide">Location on map<MapPicker latitude={latitude} longitude={longitude} onChange={pickLocation} /></label>
-        <label><span className="label-title">City<Req /></span>
-          <input {...register("city", { required: "City is required", minLength: { value: 2, message: "Enter at least 2 characters" } })} />
-          <FieldError error={errors.city} />
-        </label>
-        <label><span className="label-title">State<Req /></span>
-          <input {...register("state", { required: "State is required", minLength: { value: 2, message: "Enter at least 2 characters" } })} />
-          <FieldError error={errors.state} />
-        </label>
-        <label><span className="label-title">Country<Req /></span>
-          <input {...register("country", { required: "Country is required" })} />
-          <FieldError error={errors.country} />
-        </label>
-        <label><span className="label-title">Pincode<Req /></span>
-          <input {...register("pincode", { required: "Pincode is required", minLength: { value: 3, message: "Enter at least 3 characters" } })} />
-          <FieldError error={errors.pincode} />
-        </label>
-        <label><span className="label-title">Contact number<Req /></span>
-          <PhoneField control={control} name="contactNumber" error={errors.contactNumber} required />
-        </label>
-        <label>Website<input type="url" placeholder="https://example.com" {...register("website")} /></label>
-        <label>Star rating<select {...register("starRating")}><option value="">Not set</option><option value="1">1 star</option><option value="2">2 star</option><option value="3">3 star</option><option value="4">4 star</option><option value="5">5 star</option></select></label>
-        <label><span className="label-title">Check-in time<Req /></span>
-          <input type="time" {...register("checkInTime", { required: "Check-in time is required" })} />
-          <FieldError error={errors.checkInTime} />
-        </label>
-        <label><span className="label-title">Check-out time<Req /></span>
-          <input type="time" {...register("checkOutTime", { required: "Check-out time is required" })} />
-          <FieldError error={errors.checkOutTime} />
-        </label>
-        <label>Tax percent<input type="number" step="0.01" min="0" max="100" placeholder="e.g. 12" {...register("taxPercent")} /></label>
-        <label>Cancellation fee percent<input type="number" step="0.01" min="0" max="100" {...register("cancellationFeePercent")} /></label>
-        <label className="check-option"><input type="checkbox" {...register("taxesIncluded")} /><span>Prices already include tax</span></label>
-        <label className="property-form-grid__wide">Facilities<input placeholder="Restaurant, Pool, Banquet Hall" {...register("facilities")} /></label>
+        <label><span className="label-title">City<Req /></span><input {...register("city", { required: "City is required" })} /><FieldError error={errors.city} /></label>
+        <label>State<input {...register("state")} /></label>
+        <label><span className="label-title">Country<Req /></span><input {...register("country", { required: "Country is required" })} /></label>
+        <label>Pincode<input {...register("pincode")} /></label>
+        <label><span className="label-title">Latitude<Req /></span><input type="number" step="0.0000001" {...register("latitude", { required: true, valueAsNumber: true, min: -90, max: 90 })} /></label>
+        <label><span className="label-title">Longitude<Req /></span><input type="number" step="0.0000001" {...register("longitude", { required: true, valueAsNumber: true, min: -180, max: 180 })} /></label>
+        <label><span className="label-title">Phone<Req /></span><PhoneField control={control} name="phone" error={errors.phone} required /></label>
+        <label><span className="label-title">Seating capacity<Req /></span><input type="number" min={1} {...register("seatingCapacity", { required: true, valueAsNumber: true })} /></label>
+        <label><span className="label-title">Max party size<Req /></span><input type="number" min={1} {...register("maxPartySize", { required: true, valueAsNumber: true })} /></label>
       </div>
       {mutation.error && <div className="form-error">{mutation.error.message}</div>}
       <footer className="settings-form__footer">

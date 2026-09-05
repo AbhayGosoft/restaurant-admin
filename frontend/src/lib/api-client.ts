@@ -1,4 +1,5 @@
 import { useAppStore } from "@/store/app-store";
+import type { ApiEnvelope } from "@/types/domain";
 
 const API_URL = (
   import.meta.env.VITE_API_URL ||
@@ -13,7 +14,7 @@ const ASSET_ORIGIN = (
   ""
 ).replace(/\/$/, "");
 
-// Uploaded files (avatars, room/stay/service images) come back from the API as paths
+// Uploaded files (banners, gallery, menu item images) come back from the API as paths
 // relative to the backend (e.g. "/uploads/images/x.jpg"). Rendered directly in an <img>,
 // the browser resolves that against the *frontend's* origin instead of the backend's,
 // so it must be rewritten to the backend origin here. Already-absolute URLs (external
@@ -33,7 +34,7 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const token = useAppStore.getState().token;
+  const token = useAppStore.getState().adminToken;
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -45,16 +46,19 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
+
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+
+  if (!response.ok || payload?.status === false) {
     if (response.status === 401) useAppStore.getState().clearSession();
     throw new ApiError(response.status, payload?.message || "Something went wrong");
   }
-  return payload as T;
+
+  return (payload?.data ?? (payload as unknown as T));
 }
 
 export async function uploadImages(files: FileList | File[]): Promise<{ urls: string[] }> {
-  const token = useAppStore.getState().token;
+  const token = useAppStore.getState().adminToken;
   const formData = new FormData();
   Array.from(files).forEach((file) => formData.append("images", file));
 

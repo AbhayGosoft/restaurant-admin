@@ -7,41 +7,20 @@ const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
 const prisma = new PrismaClient({ adapter });
 
 const main = async () => {
-  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD;
-
-  if (!email || !password) {
-    throw new Error("Set ADMIN_EMAIL and ADMIN_PASSWORD in .env before running this script.");
-  }
-
-  // Drops the stale blank-email admin row left over from the old seed script
-  // (it ran before ADMIN_EMAIL had a real value, so it upserted email: "").
-  await prisma.user.deleteMany({ where: { role: "ADMIN", email: "" } });
+  if (!process.env.DATABASE_URL) throw new Error("Set DATABASE_URL before running this script.");
+  const email = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SUPERADMIN_PASSWORD;
+  const name = process.env.SUPERADMIN_NAME ?? "Super Admin";
+  if (!email || !password) throw new Error("Set SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD before running this script.");
 
   const passwordHash = await bcrypt.hash(password, 12);
-  const admin = await prisma.user.upsert({
+  const admin = await prisma.adminUser.upsert({
     where: { email },
-    update: {
-      role: "ADMIN",
-      status: "ACTIVE",
-      passwordHash,
-      mustResetPassword: false,
-      setupCompleted: true,
-      currentStep: "COMPLETED",
-    },
-    create: {
-      name: "Admin",
-      email,
-      role: "ADMIN",
-      status: "ACTIVE",
-      passwordHash,
-      mustResetPassword: false,
-      setupCompleted: true,
-      currentStep: "COMPLETED",
-    },
+    update: { name, passwordHash, role: "SUPERADMIN", status: "ACTIVE" },
+    create: { name, email, passwordHash, role: "SUPERADMIN", status: "ACTIVE" },
   });
 
-  console.log(`Admin ready: ${admin.email}`);
+  console.log(`SuperAdmin ready: ${admin.email}`);
 };
 
 main()

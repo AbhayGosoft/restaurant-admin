@@ -1,4 +1,6 @@
 node_modules
 .env
+.env.production
+service_account.json
 /generated/prisma
 /dist

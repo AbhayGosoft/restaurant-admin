@@ -5,8 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { App } from "@/app/App";
 import { queryClient } from "@/lib/query-client";
 import { SocketProvider } from "@/providers/SocketProvider";
-import { NotificationProvider } from "@/providers/NotificationProvider";
-import { PushNotificationProvider } from "@/providers/PushNotificationProvider";
 import { BackButtonProvider } from "@/providers/BackButtonProvider";
 import "@/styles/index.css";
 
@@ -16,11 +14,7 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <BackButtonProvider>
           <SocketProvider>
-            <PushNotificationProvider>
-              <NotificationProvider>
-                <App />
-              </NotificationProvider>
-            </PushNotificationProvider>
+            <App />
           </SocketProvider>
         </BackButtonProvider>
       </BrowserRouter>

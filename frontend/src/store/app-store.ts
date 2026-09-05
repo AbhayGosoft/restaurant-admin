@@ -1,29 +1,22 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { User } from "@/types/domain";
+import type { AdminUser } from "@/types/domain";
 
-export interface ActiveOwner {
+export interface ActiveRestaurant {
   id: string;
   name: string;
-  email: string;
-}
-
-export interface ActiveProperty {
-  id: string;
-  name: string;
-  type: string;
+  banner?: string | null;
 }
 
 interface AppState {
-  token: string | null;
-  user: User | null;
-  activeOwner: ActiveOwner | null;
-  activeProperty: ActiveProperty | null;
+  adminToken: string | null;
+  admin: AdminUser | null;
+  activeRestaurant: ActiveRestaurant | null;
   sidebarOpen: boolean;
-  setSession: (token: string, user: User) => void;
-  setUser: (user: User) => void;
+  setSession: (token: string, admin: AdminUser) => void;
+  setAdmin: (admin: AdminUser) => void;
   clearSession: () => void;
-  enterProperty: (owner: ActiveOwner | null, property: ActiveProperty) => void;
+  enterRestaurant: (restaurant: ActiveRestaurant) => void;
   exitWorkspace: () => void;
   setSidebarOpen: (open: boolean) => void;
 }
@@ -31,26 +24,24 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      token: null,
-      user: null,
-      activeOwner: null,
-      activeProperty: null,
+      adminToken: null,
+      admin: null,
+      activeRestaurant: null,
       sidebarOpen: false,
-      setSession: (token, user) => set((state) => ({
-        token,
-        user,
-        activeOwner: state.user?.id === user.id ? state.activeOwner : null,
-        activeProperty: state.user?.id === user.id ? state.activeProperty : null,
+      setSession: (adminToken, admin) => set((state) => ({
+        adminToken,
+        admin,
+        activeRestaurant: state.admin?.id === admin.id ? state.activeRestaurant : null,
       })),
-      setUser: (user) => set({ user }),
-      clearSession: () => set({ token: null, user: null, activeOwner: null, activeProperty: null }),
-      enterProperty: (activeOwner, activeProperty) => set({ activeOwner, activeProperty }),
-      exitWorkspace: () => set({ activeOwner: null, activeProperty: null }),
+      setAdmin: (admin) => set({ admin }),
+      clearSession: () => set({ adminToken: null, admin: null, activeRestaurant: null }),
+      enterRestaurant: (activeRestaurant) => set({ activeRestaurant }),
+      exitWorkspace: () => set({ activeRestaurant: null }),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
     }),
     {
-      name: "darshan-connector-session",
-      partialize: ({ token, user, activeOwner, activeProperty }) => ({ token, user, activeOwner, activeProperty }),
+      name: "restaurant-admin-session",
+      partialize: ({ adminToken, admin, activeRestaurant }) => ({ adminToken, admin, activeRestaurant }),
     },
   ),
 );

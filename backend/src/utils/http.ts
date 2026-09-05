@@ -18,6 +18,7 @@ export const asyncHandler =
   };
 
 export const validateBody = <T>(schema: ZodType<T>, body: unknown) => schema.parse(body);
+export const validateQuery = <T>(schema: ZodType<T>, query: unknown) => schema.parse(query);
 
 export const idParam = (req: Request, name = "id") => {
   const value = req.params[name];
@@ -25,6 +26,11 @@ export const idParam = (req: Request, name = "id") => {
     throw new ApiError(400, `Invalid route parameter: ${name}`);
   }
   return value;
+};
+
+/** Standard success envelope: { status: true, message, data }. */
+export const sendSuccess = (res: Response, data: unknown, message = "OK", statusCode = 200) => {
+  res.status(statusCode).json({ status: true, message, data });
 };
 
 export const errorHandler = (
@@ -35,17 +41,19 @@ export const errorHandler = (
 ) => {
   if (error instanceof ZodError) {
     return res.status(422).json({
-      message: "Validation failed",
+      status: false,
+      message: error.issues[0]?.message ?? "Validation failed",
       errors: error.issues,
     });
   }
 
   if (error instanceof ApiError) {
-    return res.status(error.statusCode).json({ message: error.message });
+    return res.status(error.statusCode).json({ status: false, message: error.message });
   }
 
   console.error(error);
   return res.status(500).json({
+    status: false,
     message: "Internal server error",
     ...(env.nodeEnv === "development" && error instanceof Error
       ? { error: error.message }

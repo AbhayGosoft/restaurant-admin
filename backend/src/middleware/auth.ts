@@ -1,117 +1,114 @@
 import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import type { UserRole } from "../../generated/prisma/enums.js";
+import type { AdminRole } from "../../generated/prisma/enums.js";
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { ApiError } from "../utils/http.js";
 
-type JwtPayload = {
-  sub: string;
-  email: string;
-  role: UserRole;
-};
+type AdminJwtPayload = { sub: string; email: string; role: AdminRole; type: "admin" };
+type CustomerJwtPayload = { sub: string; type: "customer" };
 
-export const signAuthToken = (payload: JwtPayload) =>
-  jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn } as jwt.SignOptions);
+// --- Admin / SuperAdmin ------------------------------------------------
 
-export const requireAuth = async (req: Request, _res: Response, next: NextFunction) => {
+export const signAdminToken = (payload: Omit<AdminJwtPayload, "type">) =>
+  jwt.sign({ ...payload, type: "admin" }, env.jwtSecret, { expiresIn: env.jwtExpiresIn } as jwt.SignOptions);
+
+export const requireAdminAuth = async (req: Request, _res: Response, next: NextFunction) => {
   try {
     const header = req.headers.authorization;
     const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
-    if (!token) {
-      throw new ApiError(401, "Missing bearer token");
-    }
+    if (!token) throw new ApiError(401, "Missing bearer token");
 
-    const decoded = jwt.verify(token, env.jwtSecret) as JwtPayload;
-    const user = await prisma.user.findUnique({
+    const decoded = jwt.verify(token, env.jwtSecret) as AdminJwtPayload;
+    if (decoded.type !== "admin") throw new ApiError(403, "This token cannot be used for admin APIs");
+
+    const admin = await prisma.adminUser.findUnique({
       where: { id: decoded.sub },
       select: { id: true, email: true, role: true, status: true },
     });
+    if (!admin || admin.status !== "ACTIVE") throw new ApiError(401, "Admin is inactive or does not exist");
 
-    if (!user || user.status !== "ACTIVE") {
-      throw new ApiError(401, "User is inactive or does not exist");
-    }
-
-    req.user = { id: user.id, email: user.email, role: user.role };
+    req.admin = { id: admin.id, email: admin.email, role: admin.role };
     next();
   } catch (error) {
-    next(error instanceof ApiError ? error : new ApiError(401, "Invalid token"));
+    next(error instanceof ApiError ? error : new ApiError(401, "Invalid or expired token"));
   }
 };
 
-export const requireRole =
-  (...roles: UserRole[]) =>
-  (req: Request, _res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return next(new ApiError(401, "Authentication required"));
+export const requireSuperAdmin = (req: Request, _res: Response, next: NextFunction) => {
+  if (!req.admin) return next(new ApiError(401, "Authentication required"));
+  if (req.admin.role !== "SUPERADMIN") return next(new ApiError(403, "SuperAdmin access required"));
+  next();
+};
+
+/**
+ * Scopes a route to restaurants the authenticated admin is allowed to manage.
+ * SuperAdmin bypasses the check entirely; a plain Admin must have an
+ * AdminRestaurant link for the :restaurantId (or :id) route param.
+ */
+export const requireRestaurantAccess =
+  (paramName = "restaurantId") =>
+  async (req: Request, _res: Response, next: NextFunction) => {
+    try {
+      if (!req.admin) throw new ApiError(401, "Authentication required");
+      if (req.admin.role === "SUPERADMIN") return next();
+
+      const restaurantId = req.params[paramName];
+      if (!restaurantId || typeof restaurantId !== "string") throw new ApiError(400, `Missing route parameter: ${paramName}`);
+
+      const link = await prisma.adminRestaurant.findUnique({
+        where: { adminId_restaurantId: { adminId: req.admin.id, restaurantId } },
+      });
+      if (!link) throw new ApiError(403, "You are not authorized to manage this restaurant");
+      next();
+    } catch (error) {
+      next(error instanceof ApiError ? error : new ApiError(403, "Not authorized"));
     }
-    if (!roles.includes(req.user.role)) {
-      return next(new ApiError(403, "Insufficient permissions"));
-    }
-    return next();
   };
+
+// --- Restaurant customer -------------------------------------------------
+
+export const signCustomerAccessToken = (restaurantUserId: string) =>
+  jwt.sign({ sub: restaurantUserId, type: "customer" } satisfies CustomerJwtPayload, env.customerJwtSecret, {
+    expiresIn: env.customerAccessTokenTtl,
+  } as jwt.SignOptions);
+
+export const requireCustomerAuth = async (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    const header = req.headers.authorization;
+    const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+    if (!token) throw new ApiError(401, "Missing bearer token");
+
+    const decoded = jwt.verify(token, env.customerJwtSecret) as CustomerJwtPayload;
+    if (decoded.type !== "customer") throw new ApiError(403, "This token cannot be used for customer APIs");
+
+    const customer = await prisma.restaurantUser.findUnique({
+      where: { id: decoded.sub },
+      select: { id: true, phone: true },
+    });
+    if (!customer) throw new ApiError(401, "Account no longer exists");
+
+    req.customer = { id: customer.id, phone: customer.phone };
+    next();
+  } catch (error) {
+    next(error instanceof ApiError ? error : new ApiError(401, "Invalid or expired token"));
+  }
+};
+
+// --- Shared ---------------------------------------------------------------
 
 const timingSafeEqual = (a: string, b: string) => {
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
   if (bufA.length !== bufB.length) {
-    // Compare against itself so both branches take the same time.
     return crypto.timingSafeEqual(bufA, bufA) && false;
   }
   return crypto.timingSafeEqual(bufA, bufB);
 };
 
-export const requireAdapterKey = (req: Request, _res: Response, next: NextFunction) => {
-  if (!env.adapterApiKey) {
-    return next(new ApiError(401, "Adapter API key is not configured"));
-  }
-
-  const authHeader = req.headers.authorization ?? "";
-  const provided = authHeader.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : String(req.headers["x-api-key"] ?? "");
-
-  if (!provided || !timingSafeEqual(provided, env.adapterApiKey)) {
-    return next(new ApiError(401, "Invalid adapter API key"));
-  }
-  return next();
-};
-
-export const requireAdapterHmac = (req: Request, _res: Response, next: NextFunction) => {
-  if (!env.adapterHmacSecret) {
-    return next(new ApiError(401, "Adapter HMAC secret is not configured"));
-  }
-
-  const signature = String(req.headers["x-signature"] ?? "");
-  const timestamp = String(req.headers["x-timestamp"] ?? "");
-  if (!signature || !timestamp || !req.rawBody) {
-    return next(new ApiError(401, "Missing adapter signature"));
-  }
-
-  const sentAt = Number(timestamp);
-  if (!Number.isFinite(sentAt) || Math.abs(Date.now() - sentAt) > 5 * 60 * 1000) {
-    return next(new ApiError(401, "Adapter signature timestamp is outside the allowed window"));
-  }
-
-  const expected = crypto
-    .createHmac("sha256", env.adapterHmacSecret)
-    .update(`${timestamp}.`)
-    .update(req.rawBody)
-    .digest("hex");
-  const normalizedSignature = signature.startsWith("sha256=") ? signature.slice("sha256=".length) : signature;
-
-  if (!timingSafeEqual(normalizedSignature, expected)) {
-    return next(new ApiError(401, "Invalid adapter signature"));
-  }
-  return next();
-};
-
 export const requireClientKey = (req: Request, _res: Response, next: NextFunction) => {
-  if (!env.appClientKey) {
-    return next(new ApiError(401, "Client key is not configured"));
-  }
-
+  if (!env.appClientKey) return next();
   const provided = String(req.headers["x-client-key"] ?? "");
   if (!provided || !timingSafeEqual(provided, env.appClientKey)) {
     return next(new ApiError(401, "Invalid client key"));

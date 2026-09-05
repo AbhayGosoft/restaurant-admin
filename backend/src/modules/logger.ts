@@ -3,7 +3,7 @@ import { env } from "../config/env.js";
 
 export const logger = pino({
   level: env.logLevel,
-  base: { service: "darshan-pms-api" },
+  base: { service: "restaurant-backend-api" },
   transport:
     env.nodeEnv === "development"
       ? {

@@ -1,20 +1,11 @@
-import type { Booking, Notification } from "../../generated/prisma/client.js";
+import type { Notification, RestaurantBooking } from "../../generated/prisma/client.js";
 
 export const socketEvents = {
-  bookingNew: "booking:new",
-  bookingConfirmed: "booking:confirmed",
-  bookingCancelled: "booking:cancelled",
-  bookingExpired: "booking:expired",
-  bookingCheckedIn: "booking:checked-in",
-  bookingCheckedOut: "booking:checked-out",
-  bookingRoomChanged: "booking:room-changed",
-  bookingExtended: "booking:extended",
-  notificationNew: "notification:new",
-  roomUpdate: "room:update",
+  bookingNew: "restaurant:booking:new",
+  bookingModified: "restaurant:booking:modified",
+  bookingCancelled: "restaurant:booking:cancelled",
+  notificationNew: "restaurant:notification:new",
 } as const;
 
-export type BookingSocketPayload = Booking & {
-  stayProfile?: { id: string; ownerId: string; name: string };
-};
-
+export type BookingSocketPayload = RestaurantBooking;
 export type NotificationSocketPayload = Notification;

@@ -1,60 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Camera, KeyRound, LogOut, Save, UserRound } from "lucide-react";
-import { api, resolveAssetUrl, uploadImages } from "@/lib/api-client";
-import { queryClient } from "@/lib/query-client";
+import { KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { api } from "@/lib/api-client";
 import { useAppStore } from "@/store/app-store";
 import { initials } from "@/lib/format";
-import type { User } from "@/types/domain";
+import type { AdminUser } from "@/types/domain";
 import { Button } from "@/components/ui/Button";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { LoadingGrid, StateView } from "@/components/ui/StateView";
-import { FieldError, Req, cleanBody } from "@/components/resource/dialog-kit";
+import { FieldError, Req } from "@/components/resource/dialog-kit";
 
-type ProfileForm = { name: string; businessName: string };
 type PasswordForm = { currentPassword: string; newPassword: string; confirmPassword: string };
 
 export function ProfilePage() {
-  const setUser = useAppStore((state) => state.setUser);
   const clearSession = useAppStore((state) => state.clearSession);
-  const me = useQuery({ queryKey: ["auth", "me"], queryFn: () => api<User>("/auth/me") });
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [avatarError, setAvatarError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const me = useQuery({ queryKey: ["admin-auth", "me"], queryFn: () => api<AdminUser>("/admin/auth/me") });
   const [passwordSaved, setPasswordSaved] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ProfileForm>({ defaultValues: { name: "", businessName: "" } });
   const passwordForm = useForm<PasswordForm>({ defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" } });
 
-  useEffect(() => {
-    if (!me.data) return;
-    reset({ name: me.data.name, businessName: me.data.businessName ?? "" });
-    setAvatarUrl(me.data.avatarUrl ?? null);
-  }, [me.data, reset]);
-
-  const avatarUpload = useMutation({
-    mutationFn: (file: File) => uploadImages([file]),
-    onSuccess: (result) => {
-      setAvatarError("");
-      setAvatarUrl(result.urls[0]);
-    },
-    onError: (error: Error) => setAvatarError(error.message),
-  });
-
-  const saveProfile = useMutation({
-    mutationFn: (data: ProfileForm) => api<User>("/auth/profile", { method: "PATCH", body: cleanBody({ ...data, avatarUrl }) }),
-    onSuccess: async (updated) => {
-      setUser({ ...me.data!, ...updated });
-      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    },
-  });
-
   const changePassword = useMutation({
-    mutationFn: (data: PasswordForm) => api<{ message: string }>("/auth/change-password", {
+    mutationFn: (data: PasswordForm) => api("/admin/auth/change-password", {
       method: "PATCH",
       body: { currentPassword: data.currentPassword, newPassword: data.newPassword },
     }),
@@ -68,53 +34,22 @@ export function ProfilePage() {
   if (me.isLoading) return <main className="page"><LoadingGrid /></main>;
   if (me.isError || !me.data) return <main className="page"><StateView title="Couldn't load your profile" message="Check the backend connection and try once more." action={() => void me.refetch()} /></main>;
 
-  const handleAvatarPick = (files: FileList | null) => {
-    const file = files?.[0];
-    if (file) avatarUpload.mutate(file);
-  };
-
   return (
     <main className="page profile-page">
       <section className="resource-head">
         <span className="eyebrow"><UserRound size={14} /> My profile</span>
       </section>
 
-      <form className="settings-form profile-card" noValidate onSubmit={handleSubmit((data) => saveProfile.mutate(data))}>
+      <div className="settings-form profile-card">
         <div className="profile-photo-row">
-          <div className="profile-photo">
-            {avatarUrl ? <img src={resolveAssetUrl(avatarUrl)} alt="" /> : <span>{initials(me.data.name)}</span>}
-          </div>
-          <div className="profile-photo-actions">
-            <Button type="button" variant="secondary" loading={avatarUpload.isPending} onClick={() => fileInputRef.current?.click()}>
-              <Camera size={16} /> {avatarUrl ? "Change photo" : "Upload photo"}
-            </Button>
-            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => { handleAvatarPick(event.target.files); event.target.value = ""; }} />
-            {avatarError && <small className="error-text">{avatarError}</small>}
+          <div className="profile-photo"><span>{initials(me.data.name)}</span></div>
+          <div>
+            <strong>{me.data.name}</strong>
+            <div className="muted">{me.data.email}</div>
+            {me.data.role === "SUPERADMIN" && <span className="badge"><ShieldCheck size={12} /> SuperAdmin</span>}
           </div>
         </div>
-
-        <div className="property-form-grid">
-          <label><span className="label-title">Full name<Req /></span>
-            <input {...register("name", { required: "Name is required", minLength: { value: 2, message: "Enter at least 2 characters" } })} />
-            <FieldError error={errors.name} />
-          </label>
-          <label>Email address
-            <input value={me.data.email} disabled readOnly />
-          </label>
-          <label>Mobile number
-            <input value={me.data.phone || "Not set"} disabled readOnly />
-          </label>
-          <label>Business name (optional)
-            <input {...register("businessName")} placeholder="e.g. Darshan Stays" />
-          </label>
-        </div>
-
-        {saveProfile.error && <div className="form-error">{saveProfile.error.message}</div>}
-        <footer className="settings-form__footer">
-          {saved && <span className="settings-saved">Saved</span>}
-          <Button type="submit" loading={saveProfile.isPending}><Save size={17} /> Save changes</Button>
-        </footer>
-      </form>
+      </div>
 
       <form className="settings-form profile-card" noValidate onSubmit={passwordForm.handleSubmit((data) => changePassword.mutate(data))}>
         <div className="profile-card__head"><KeyRound size={18} /><div><strong>Change password</strong><small>Use at least 8 characters. You'll stay signed in on this device.</small></div></div>
