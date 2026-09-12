@@ -7,6 +7,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend-deploy.yml"
+
   workflow_dispatch:
 
 concurrency:
@@ -36,22 +37,6 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Create CI Environment
-        run: |
-          cat > .env <<EOF
-          DATABASE_URL=mysql://ci:ci@localhost:3306/ci
-          PORT=4000
-          NODE_ENV=test
-          JWT_SECRET=ci-jwt-secret
-          JWT_EXPIRES_IN=7d
-          CUSTOMER_JWT_SECRET=ci-customer-jwt-secret
-          FRONTEND_ORIGIN=http://localhost:3000
-          REDIS_URL=redis://127.0.0.1:6379
-          LOG_LEVEL=silent
-          APP_CLIENT_KEY=ci-client-key
-          RESTAURANT_BOOKING_ADVANCE_INR=99
-          EOF
-
       - name: Generate Prisma Client
         run: npm run prisma:generate
 
@@ -64,6 +49,7 @@ jobs:
       - name: Build Backend
         run: npm run build
 
+
   deploy:
     name: Deploy Backend
     runs-on: ubuntu-latest
@@ -74,50 +60,68 @@ jobs:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
           script_stop: true
           command_timeout: 30m
+
           script: |
             set -Eeuo pipefail
 
-            APP_NAME="connector"
-            REPO_PATH="${{ secrets.PROJECT_PATH }}"
+            APP_NAME="restaurant-backend"
+            REPO_PATH="/var/www/restaurant-admin"
             BACKEND_PATH="$REPO_PATH/backend"
             RELEASE_SHA="${{ github.sha }}"
 
-            echo "========== Backend Deploy =========="
+            echo "======================================"
+            echo " Restaurant Backend Deploy"
+            echo "======================================"
 
             cd "$REPO_PATH"
 
             echo "Fetching latest code..."
+
             git fetch origin main
+
+            echo "Checking out release: $RELEASE_SHA"
+
             git reset --hard "$RELEASE_SHA"
 
             cd "$BACKEND_PATH"
 
-            if [ ! -f ".env" ]; then
-              echo "ERROR: backend/.env not found."
+            echo "Checking production environment..."
+
+            if [ ! -f ".env.production" ]; then
+              echo "❌ ERROR: backend/.env.production not found."
               exit 1
             fi
+
+            echo "Creating .env from .env.production..."
+
+            cp .env.production .env
 
             chmod 600 .env
 
             echo "Installing dependencies..."
+
             npm ci
 
             echo "Generating Prisma client..."
+
             npm run prisma:generate
 
             echo "Validating Prisma schema..."
+
             npx prisma validate
 
-            echo "Applying migrations..."
+            echo "Applying database migrations..."
+
             npx prisma migrate deploy
 
             echo "Building backend..."
+
             npm run build
 
             echo "Restarting PM2..."
@@ -130,24 +134,50 @@ jobs:
                 --cwd "$BACKEND_PATH"
             fi
 
+            echo "Saving PM2 process list..."
+
             pm2 save
 
-            echo "Waiting for application..."
+            echo "======================================"
+            echo " Waiting for application..."
+            echo "======================================"
 
             for i in {1..12}; do
-              if curl --fail --silent http://127.0.0.1:4000/api/health >/dev/null; then
+
+              if curl \
+                --fail \
+                --silent \
+                --show-error \
+                http://127.0.0.1:4000/api/health \
+                >/dev/null; then
+
                 echo "✅ Health check passed."
-                echo "========== Deploy Completed =========="
+
+                echo "======================================"
+                echo " Deployment Completed Successfully"
+                echo "======================================"
+
                 exit 0
               fi
 
-              echo "Application not ready yet... retry $i/12"
+              echo "Application not ready yet..."
+              echo "Retry $i/12"
+
               sleep 5
             done
 
+            echo "======================================"
             echo "❌ Health check failed"
+            echo "======================================"
+
+            echo "PM2 status:"
 
             pm2 status "$APP_NAME"
-            pm2 logs "$APP_NAME" --lines 50 --nostream
+
+            echo "Recent application logs:"
+
+            pm2 logs "$APP_NAME" \
+              --lines 50 \
+              --nostream
 
             exit 1
