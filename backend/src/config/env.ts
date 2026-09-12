@@ -23,6 +23,7 @@ export const env = {
 
   frontendOrigin: process.env.FRONTEND_ORIGIN ?? "*",
   redisUrl: process.env.REDIS_URL ?? "redis://127.0.0.1:6379",
+  redisPassword: process.env.REDIS_PASSWORD,
   logLevel: process.env.LOG_LEVEL ?? "info",
 
   superAdminName: process.env.SUPERADMIN_NAME ?? "Super Admin",

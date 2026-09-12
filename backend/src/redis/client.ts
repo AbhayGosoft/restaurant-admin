@@ -2,7 +2,11 @@ import { createClient } from "redis";
 import { env } from "../config/env.js";
 import { logger } from "../modules/logger.js";
 
-export const redisClient = createClient({ url: env.redisUrl, RESP: 2 });
+export const redisClient = createClient({
+  url: env.redisUrl,
+  password: env.redisPassword,
+  RESP: 2,
+});
 export const redisSubscriber = redisClient.duplicate();
 
 let connected = false;
