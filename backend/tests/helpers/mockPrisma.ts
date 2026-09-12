@@ -8,6 +8,7 @@ import { vi } from "vitest";
  * transaction are visible/configurable the same way), and `$queryRaw`/`$executeRaw`
  * resolve to an empty result by default (used only for advisory row locking in this codebase).
  */
+
 export const createMockPrisma = () => {
   const modelHandler: ProxyHandler<Record<string, unknown>> = {
     get: (target, prop: string) => {
@@ -24,12 +25,19 @@ export const createMockPrisma = () => {
       if (prop === "$transaction") {
         if (!target.$transaction) {
           target.$transaction = vi.fn(async (arg: unknown) =>
-            typeof arg === "function" ? (arg as (tx: unknown) => unknown)(proxy) : Promise.all(arg as Promise<unknown>[]),
+            typeof arg === "function"
+              ? (arg as (tx: unknown) => unknown)(proxy)
+              : Promise.all(arg as Promise<unknown>[]),
           );
         }
         return target.$transaction;
       }
-      if (prop === "$queryRaw" || prop === "$executeRaw" || prop === "$queryRawUnsafe" || prop === "$executeRawUnsafe") {
+      if (
+        prop === "$queryRaw" ||
+        prop === "$executeRaw" ||
+        prop === "$queryRawUnsafe" ||
+        prop === "$executeRawUnsafe"
+      ) {
         if (!target[prop]) target[prop] = vi.fn(async () => []);
         return target[prop];
       }
