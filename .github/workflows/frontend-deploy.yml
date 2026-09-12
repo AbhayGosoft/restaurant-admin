@@ -1,4 +1,4 @@
-name: Deploy Frontend
+name: Frontend CI/CD
 
 on:
   push:
@@ -8,12 +8,21 @@ on:
       - "frontend/**"
       - ".github/workflows/frontend-deploy.yml"
 
+  workflow_dispatch:
+
 concurrency:
   group: frontend-production
   cancel-in-progress: true
 
+
 jobs:
-  deploy:
+
+  # ============================================================
+  # BUILD
+  # ============================================================
+
+  build:
+    name: Build Frontend
     runs-on: ubuntu-latest
 
     defaults:
@@ -21,8 +30,10 @@ jobs:
         working-directory: frontend
 
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
+
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,41 +42,97 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+
       - name: Install Dependencies
         run: npm ci
 
-      - name: Debug Environment
-        run: |
-          cat .env.production
-
-      - name: Write Production Secrets
-        run: echo "VITE_CLIENT_KEY=${{ secrets.VITE_CLIENT_KEY }}" >> .env.production
 
       - name: Build Frontend
         run: npm run build
 
+
       - name: Check Build
         run: |
-          grep -R "connector.bharatotel.com" dist || true
-          grep -R "appconnector.bharatotel.com" dist || true
+          test -f dist/index.html
+          echo "✅ Frontend build successful."
+
 
       - name: Check Build URLs
         run: |
-          strings dist/assets/*.js | grep "bharatotel.com"
+          echo "Checking generated frontend assets..."
+
+          if grep -R "connector.bharatotel.com" dist; then
+            echo "⚠️ Old connector domain found in build."
+            exit 1
+          fi
+
+          if grep -R "appconnector.bharatotel.com" dist; then
+            echo "⚠️ Old appconnector domain found in build."
+            exit 1
+          fi
+
+          echo "✅ No old connector domains found."
+
+
+  # ============================================================
+  # DEPLOY
+  # ============================================================
+
+  deploy:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+
+      - name: Install Dependencies
+        working-directory: frontend
+        run: npm ci
+
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: npm run build
+
+
+      - name: Verify Build
+        working-directory: frontend
+        run: |
+          test -f dist/index.html
+          echo "✅ Build verified."
+
 
       - name: Upload Build to VPS
         uses: appleboy/scp-action@v0.1.7
+
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
 
           source: "frontend/dist/*"
-          target: "${{ secrets.PROJECT_PATH }}/frontend/dist"
+          target: "/var/www/restaurant-admin/frontend/dist"
 
           strip_components: 2
           overwrite: true
 
+
       - name: Deployment Complete
-        run: echo "Frontend deployed successfully."
+        run: |
+          echo "======================================"
+          echo "✅ Frontend deployed successfully."
+          echo "======================================"
