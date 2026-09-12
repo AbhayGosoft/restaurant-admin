@@ -14,7 +14,13 @@ concurrency:
   group: backend-production
   cancel-in-progress: true
 
+
 jobs:
+
+  # ============================================================
+  # VALIDATE
+  # ============================================================
+
   validate:
     name: Validate Backend
     runs-on: ubuntu-latest
@@ -23,9 +29,50 @@ jobs:
       run:
         working-directory: backend
 
+    env:
+      DATABASE_URL: mysql://ci:ci@localhost:3306/ci
+      NODE_ENV: test
+      PORT: 4000
+
+      JWT_SECRET: ci-jwt-secret
+      JWT_EXPIRES_IN: 7d
+
+      CUSTOMER_JWT_SECRET: ci-customer-jwt-secret
+      CUSTOMER_ACCESS_TOKEN_TTL: 15m
+      CUSTOMER_REFRESH_TOKEN_TTL_DAYS: 30
+
+      PUBLIC_ORIGIN: http://localhost:4000
+      FRONTEND_ORIGIN: http://localhost:3000
+
+      REDIS_URL: redis://127.0.0.1:6379
+      LOG_LEVEL: silent
+
+      APP_CLIENT_KEY: ci-client-key
+      RESTAURANT_APP_API_KEY: ci-restaurant-api-key
+
+      RESTAURANT_BOOKING_ADVANCE_INR: 99
+      BOOKING_MODIFICATION_CUTOFF_MINUTES: 60
+      BOOKING_REMINDER_MINUTES_BEFORE: 120
+
+      SUPERADMIN_NAME: CI Admin
+      SUPERADMIN_EMAIL: ci@example.com
+      SUPERADMIN_PASSWORD: ci-password
+
+      CENTRAL_AUTH_JWKS_URL: http://localhost
+      CENTRAL_AUTH_ISSUER: http://localhost
+      CENTRAL_AUTH_AUDIENCE: bharatotel-modules
+
+      RAZORPAY_KEY_ID: ci-key
+      RAZORPAY_KEY_SECRET: ci-secret
+
+      ONESIGNAL_APP_ID: ci-app-id
+      ONESIGNAL_API_KEY: ci-api-key
+
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
+
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,21 +81,30 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
+
       - name: Install Dependencies
         run: npm ci
+
 
       - name: Generate Prisma Client
         run: npm run prisma:generate
 
+
       - name: Validate Prisma Schema
         run: npx prisma validate
+
 
       - name: Run Tests
         run: npm test
 
+
       - name: Build Backend
         run: npm run build
 
+
+  # ============================================================
+  # DEPLOY
+  # ============================================================
 
   deploy:
     name: Deploy Backend
@@ -57,46 +113,92 @@ jobs:
     environment: production
 
     steps:
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
+
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
+
           script_stop: true
           command_timeout: 30m
 
           script: |
+
             set -Eeuo pipefail
 
+
+            # ==================================================
+            # CONFIGURATION
+            # ==================================================
+
             APP_NAME="restaurant-backend"
+
             REPO_PATH="/var/www/restaurant-admin"
+
             BACKEND_PATH="$REPO_PATH/backend"
+
             RELEASE_SHA="${{ github.sha }}"
 
-            echo "======================================"
-            echo " Restaurant Backend Deploy"
-            echo "======================================"
+
+            echo "=============================================="
+            echo "     RESTAURANT BACKEND DEPLOYMENT"
+            echo "=============================================="
+
+            echo "Repository : $REPO_PATH"
+            echo "Backend    : $BACKEND_PATH"
+            echo "Release    : $RELEASE_SHA"
+            echo "PM2 App    : $APP_NAME"
+
+            echo ""
+
+
+            # ==================================================
+            # GO TO PROJECT
+            # ==================================================
 
             cd "$REPO_PATH"
+
+
+            # ==================================================
+            # FETCH LATEST CODE
+            # ==================================================
 
             echo "Fetching latest code..."
 
             git fetch origin main
 
-            echo "Checking out release: $RELEASE_SHA"
+
+            echo "Checking out release..."
 
             git reset --hard "$RELEASE_SHA"
 
+
+            # ==================================================
+            # BACKEND DIRECTORY
+            # ==================================================
+
             cd "$BACKEND_PATH"
+
+
+            # ==================================================
+            # PRODUCTION ENVIRONMENT
+            # ==================================================
 
             echo "Checking production environment..."
 
             if [ ! -f ".env.production" ]; then
-              echo "❌ ERROR: backend/.env.production not found."
+
+              echo "❌ ERROR:"
+              echo "backend/.env.production not found."
+
               exit 1
+
             fi
+
 
             echo "Creating .env from .env.production..."
 
@@ -104,43 +206,84 @@ jobs:
 
             chmod 600 .env
 
+
+            # ==================================================
+            # INSTALL DEPENDENCIES
+            # ==================================================
+
             echo "Installing dependencies..."
 
             npm ci
 
-            echo "Generating Prisma client..."
+
+            # ==================================================
+            # PRISMA
+            # ==================================================
+
+            echo "Generating Prisma Client..."
 
             npm run prisma:generate
+
 
             echo "Validating Prisma schema..."
 
             npx prisma validate
 
+
             echo "Applying database migrations..."
 
             npx prisma migrate deploy
+
+
+            # ==================================================
+            # BUILD
+            # ==================================================
 
             echo "Building backend..."
 
             npm run build
 
-            echo "Restarting PM2..."
+
+            # ==================================================
+            # PM2
+            # ==================================================
+
+            echo "Restarting PM2 application..."
 
             if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
+
+              echo "Existing PM2 process found."
+
               pm2 restart "$APP_NAME" --update-env
+
             else
+
+              echo "PM2 process not found. Starting application..."
+
               pm2 start dist/src/server.js \
                 --name "$APP_NAME" \
                 --cwd "$BACKEND_PATH"
+
             fi
+
+
+            # ==================================================
+            # SAVE PM2
+            # ==================================================
 
             echo "Saving PM2 process list..."
 
             pm2 save
 
-            echo "======================================"
-            echo " Waiting for application..."
-            echo "======================================"
+
+            # ==================================================
+            # HEALTH CHECK
+            # ==================================================
+
+            echo ""
+            echo "=============================================="
+            echo "        WAITING FOR APPLICATION"
+            echo "=============================================="
 
             for i in {1..12}; do
 
@@ -151,33 +294,47 @@ jobs:
                 http://127.0.0.1:4000/api/health \
                 >/dev/null; then
 
-                echo "✅ Health check passed."
+                echo ""
+                echo "=============================================="
+                echo "       ✅ HEALTH CHECK PASSED"
+                echo "=============================================="
 
-                echo "======================================"
-                echo " Deployment Completed Successfully"
-                echo "======================================"
+                echo "Deployment completed successfully."
 
                 exit 0
+
               fi
+
 
               echo "Application not ready yet..."
               echo "Retry $i/12"
 
               sleep 5
+
             done
 
-            echo "======================================"
-            echo "❌ Health check failed"
-            echo "======================================"
 
+            # ==================================================
+            # FAILURE
+            # ==================================================
+
+            echo ""
+            echo "=============================================="
+            echo "       ❌ HEALTH CHECK FAILED"
+            echo "=============================================="
+
+            echo ""
             echo "PM2 status:"
 
             pm2 status "$APP_NAME"
 
+
+            echo ""
             echo "Recent application logs:"
 
             pm2 logs "$APP_NAME" \
               --lines 50 \
               --nostream
+
 
             exit 1
