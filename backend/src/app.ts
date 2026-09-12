@@ -14,6 +14,7 @@ import { requireClientKey } from "./middleware/auth.js";
 import { logger } from "./modules/logger.js";
 
 import customerAuthRoutes from "./routes/customerAuth.routes.js";
+import restaurantCentralAuthRoutes from "./routes/restaurantCentralAuth.routes.js";
 import adminAuthRoutes from "./routes/adminAuth.routes.js";
 import restaurantsRoutes from "./routes/restaurants.routes.js";
 import paymentsRoutes from "./routes/payments.routes.js";
@@ -65,6 +66,11 @@ app.get("/", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Darshan Admin (central auth) server-to-server bridge — authenticated by its own
+// app key (see requireRestaurantAppKey), not the admin frontend's x-client-key, so
+// it must be mounted ahead of the requireClientKey gate below.
+app.use("/api/restaurant", restaurantCentralAuthRoutes);
 
 app.use("/api", requireClientKey);
 

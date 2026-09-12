@@ -56,14 +56,14 @@ enum SlotMeal {
 }
 
 model RestaurantUser {
-  id          String   @id @default(uuid())
-  firebaseUid String   @unique @map("firebase_uid")
-  phone       String   @unique
-  name        String
-  email       String?
-  playerId    String?  @map("player_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  phone         String   @unique
+  name          String
+  email         String?
+  playerId      String?  @map("player_id")
+  centralUserId Int?     @unique @map("central_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   bookings        RestaurantBooking[]
   payments        Payment[]

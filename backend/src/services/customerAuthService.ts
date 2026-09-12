@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
-import { verifyFirebaseIdToken } from "../lib/firebaseAdmin.js";
 import { env } from "../config/env.js";
 import { signCustomerAccessToken } from "../middleware/auth.js";
 import { ApiError } from "../utils/http.js";
@@ -20,23 +20,32 @@ const issueSession = async (restaurantUserId: string) => {
       expiresAt: refreshExpiry(),
     },
   });
-  return { accessToken: signCustomerAccessToken(restaurantUserId), refreshToken: rawRefreshToken };
+  const accessToken = signCustomerAccessToken(restaurantUserId);
+  const { exp, iat } = jwt.decode(accessToken) as { exp: number; iat: number };
+  return { accessToken, refreshToken: rawRefreshToken, expiresIn: exp - iat };
 };
 
-export const authenticateCustomer = async (input: {
-  firebaseToken: string;
+/**
+ * Login-or-register by phone number for the Darshan Admin (central auth) bridge.
+ * Phone is the matching key: an existing row is returned untouched aside from
+ * backfilling name/email/player_id, never recreated — order history, addresses
+ * and saved cards must survive every call, since central auth calls this on
+ * every login for the same user.
+ */
+export const authenticateCentralUser = async (input: {
+  phone: string;
+  centralUserId: number;
   name?: string;
   email?: string;
   playerId?: string;
 }) => {
-  const { uid, phone } = await verifyFirebaseIdToken(input.firebaseToken);
-
-  const existing = await prisma.restaurantUser.findUnique({ where: { firebaseUid: uid } });
+  const existing = await prisma.restaurantUser.findUnique({ where: { phone: input.phone } });
 
   const user = existing
     ? await prisma.restaurantUser.update({
         where: { id: existing.id },
         data: {
+          centralUserId: input.centralUserId,
           name: input.name?.trim() || existing.name,
           email: input.email?.trim() || existing.email,
           playerId: input.playerId ?? existing.playerId,
@@ -44,8 +53,8 @@ export const authenticateCustomer = async (input: {
       })
     : await prisma.restaurantUser.create({
         data: {
-          firebaseUid: uid,
-          phone,
+          phone: input.phone,
+          centralUserId: input.centralUserId,
           name: input.name?.trim() || "Guest",
           email: input.email?.trim(),
           playerId: input.playerId,

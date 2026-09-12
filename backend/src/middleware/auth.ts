@@ -115,3 +115,18 @@ export const requireClientKey = (req: Request, _res: Response, next: NextFunctio
   }
   return next();
 };
+
+/**
+ * Gate for the Darshan Admin (central auth) server-to-server bridge. This is a
+ * distinct trust boundary from `requireClientKey`: that one is the admin web
+ * frontend's shared secret, this one identifies the central auth caller and is
+ * carried as a normal bearer token per the integration spec, not x-client-key.
+ */
+export const requireRestaurantAppKey = (req: Request, _res: Response, next: NextFunction) => {
+  const header = req.headers.authorization;
+  const provided = header?.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!provided || !timingSafeEqual(provided, env.restaurantAppApiKey)) {
+    return next(new ApiError(401, "Invalid or missing app key"));
+  }
+  return next();
+};

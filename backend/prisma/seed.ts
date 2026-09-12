@@ -156,8 +156,33 @@ const main = async () => {
     banner: "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1400&q=80",
   });
 
+  const restaurant3 = await upsertRestaurant({
+    name: "Bites & Brews Cafe",
+    cuisineLabel: "Cafe • Fast Food • Continental",
+    isPureVeg: false,
+    categoryKeys: ["cafe", "fast_food"],
+    city: "Ahmedabad",
+    addressLine: "SG Highway, Near Iskcon Cross Road",
+    pincode: "380054",
+    latitude: "23.0304000",
+    longitude: "72.5066000",
+    phone: "9000003004",
+    priceForTwo: 450,
+    rating: "4.3",
+    ratingCount: 540,
+    offerText: "Flat 15% OFF",
+    offerSubText: "on all beverages",
+    about: "A casual cafe serving all-day breakfast, burgers, and specialty coffee.",
+    banner: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1400&q=80",
+  });
+
   await prisma.adminRestaurant.deleteMany({ where: { adminId: admin.id } });
-  await prisma.adminRestaurant.create({ data: { adminId: admin.id, restaurantId: restaurant1.id } });
+  await prisma.adminRestaurant.createMany({
+    data: [
+      { adminId: admin.id, restaurantId: restaurant1.id },
+      { adminId: admin.id, restaurantId: restaurant3.id },
+    ],
+  });
 
   const seedMenu = async (
     restaurantId: string,
@@ -226,10 +251,178 @@ const main = async () => {
     },
   ]);
 
+  await seedMenu(restaurant3.id, [
+    {
+      name: "Beverages",
+      items: [
+        { name: "Cold Coffee", description: "Chilled coffee blended with ice cream.", price: 150, isVeg: true },
+        { name: "Cappuccino", description: "Espresso topped with steamed milk foam.", price: 130, isVeg: true },
+      ],
+    },
+    {
+      name: "Snacks",
+      items: [
+        { name: "French Fries", description: "Crispy salted potato fries.", price: 120, isVeg: true },
+        { name: "Veg Burger", description: "Grilled veg patty with lettuce and cheese.", price: 160, isVeg: true },
+        { name: "Chicken Burger", description: "Grilled chicken patty with lettuce and mayo.", price: 190, isVeg: false },
+      ],
+    },
+  ]);
+
+  // Dummy customer + payments + bookings so booking/notification APIs have data to return.
+  const customer = await prisma.restaurantUser.upsert({
+    where: { phone: "+919998887771" },
+    update: { name: "Rahul Sharma", email: "rahul.sharma@example.com", centralUserId: 100001 },
+    create: { phone: "+919998887771", name: "Rahul Sharma", email: "rahul.sharma@example.com", centralUserId: 100001 },
+  });
+
+  const upsertPayment = async (input: { orderId: string; paymentId: string; amount: number }) =>
+    prisma.payment.upsert({
+      where: { razorpayOrderId: input.orderId },
+      update: {
+        razorpayPaymentId: input.paymentId,
+        razorpaySignature: `seed_signature_${input.orderId}`,
+        amount: input.amount,
+        status: "VERIFIED",
+        restaurantUserId: customer.id,
+      },
+      create: {
+        restaurantUserId: customer.id,
+        razorpayOrderId: input.orderId,
+        razorpayPaymentId: input.paymentId,
+        razorpaySignature: `seed_signature_${input.orderId}`,
+        amount: input.amount,
+        status: "VERIFIED",
+      },
+    });
+
+  const payment1 = await upsertPayment({ orderId: "order_SEED0001SSR", paymentId: "pay_SEED0001SSR", amount: 200 });
+  const payment2 = await upsertPayment({ orderId: "order_SEED0002APV", paymentId: "pay_SEED0002APV", amount: 150 });
+  const payment3 = await upsertPayment({ orderId: "order_SEED0003BBC", paymentId: "pay_SEED0003BBC", amount: 250 });
+
+  const today = new Date();
+  const inDays = (n: number) => {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() + n);
+    d.setUTCHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const upsertBooking = async (input: {
+    humanBookingId: string;
+    restaurant: typeof restaurant1;
+    paymentId: string;
+    date: Date;
+    time: string;
+    people: number;
+    tablePreference: "ANY" | "WINDOW" | "INDOOR" | "OUTDOOR";
+    advancePaid: number;
+    status: "UPCOMING" | "CANCELLED";
+    cancellationReason?: "CHANGE_OF_PLANS" | "BOOKED_BY_MISTAKE" | "FOUND_BETTER_OPTION" | "RESTAURANT_NOT_RESPONDING" | "OTHER";
+    refundEligible?: boolean;
+    refundAmount?: number;
+  }) => {
+    const base = {
+      restaurantId: input.restaurant.id,
+      restaurantUserId: customer.id,
+      restaurantNameSnapshot: input.restaurant.name,
+      restaurantImageSnapshot: input.restaurant.banner,
+      ratingSnapshot: input.restaurant.rating,
+      cuisineLabelSnapshot: input.restaurant.cuisineLabel,
+      date: input.date,
+      time: input.time,
+      people: input.people,
+      tablePreference: input.tablePreference,
+      fullName: customer.name,
+      mobileNumber: customer.phone,
+      email: customer.email,
+      advancePaid: input.advancePaid,
+      paymentId: input.paymentId,
+      status: input.status,
+      cancellationReason: input.cancellationReason,
+      cancelledAt: input.status === "CANCELLED" ? new Date() : null,
+      refundEligible: input.refundEligible,
+      refundAmount: input.refundAmount,
+    } as const;
+
+    return prisma.restaurantBooking.upsert({
+      where: { humanBookingId: input.humanBookingId },
+      update: base,
+      create: { humanBookingId: input.humanBookingId, ...base },
+    });
+  };
+
+  const bookingUpcoming = await upsertBooking({
+    humanBookingId: "#SSRSEED0001",
+    restaurant: restaurant1,
+    paymentId: payment1.id,
+    date: inDays(3),
+    time: "19:30",
+    people: 4,
+    tablePreference: "WINDOW",
+    advancePaid: 200,
+    status: "UPCOMING",
+  });
+
+  const bookingPast = await upsertBooking({
+    humanBookingId: "#APVSEED0002",
+    restaurant: restaurant2,
+    paymentId: payment2.id,
+    date: inDays(-5),
+    time: "12:30",
+    people: 2,
+    tablePreference: "ANY",
+    advancePaid: 150,
+    status: "UPCOMING",
+  });
+
+  const bookingCancelled = await upsertBooking({
+    humanBookingId: "#BBCSEED0003",
+    restaurant: restaurant3,
+    paymentId: payment3.id,
+    date: inDays(5),
+    time: "20:00",
+    people: 3,
+    tablePreference: "INDOOR",
+    advancePaid: 250,
+    status: "CANCELLED",
+    cancellationReason: "CHANGE_OF_PLANS",
+    refundEligible: true,
+    refundAmount: 125,
+  });
+
+  await prisma.notification.deleteMany({ where: { restaurantUserId: customer.id } });
+  await prisma.notification.createMany({
+    data: [
+      {
+        restaurantUserId: customer.id,
+        type: "BOOKING_CONFIRMED",
+        bookingId: bookingUpcoming.id,
+        title: "Booking confirmed",
+        body: `Your table at ${restaurant1.name} is confirmed.`,
+      },
+      {
+        restaurantUserId: customer.id,
+        type: "BOOKING_CONFIRMED",
+        bookingId: bookingPast.id,
+        title: "Booking confirmed",
+        body: `Your table at ${restaurant2.name} is confirmed.`,
+      },
+      {
+        restaurantUserId: customer.id,
+        type: "BOOKING_CANCELLED",
+        bookingId: bookingCancelled.id,
+        title: "Booking cancelled",
+        body: `Your booking at ${restaurant3.name} has been cancelled.`,
+      },
+    ],
+  });
+
   console.log("Seed complete.");
   console.log(`SuperAdmin login: ${superAdminEmail} / ${superAdminPassword}`);
-  console.log(`Admin login: ${adminEmail} / ${adminPassword} (manages "${restaurant1.name}")`);
-  console.log(`Restaurants: ${restaurant1.name}, ${restaurant2.name}`);
+  console.log(`Admin login: ${adminEmail} / ${adminPassword} (manages "${restaurant1.name}", "${restaurant3.name}")`);
+  console.log(`Restaurants: ${restaurant1.name}, ${restaurant2.name}, ${restaurant3.name}`);
+  console.log(`Dummy customer: ${customer.name} (${customer.phone}) with 3 bookings (upcoming/past/cancelled)`);
 };
 
 main()

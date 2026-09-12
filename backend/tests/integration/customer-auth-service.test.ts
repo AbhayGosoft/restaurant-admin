@@ -6,56 +6,61 @@ vi.mock("../../src/lib/prisma.js", async () => {
   return { prisma: createMockPrisma() };
 });
 
-vi.mock("../../src/lib/firebaseAdmin.js", () => ({
-  verifyFirebaseIdToken: vi.fn(),
-}));
-
 let prisma: any;
-let verifyFirebaseIdToken: any;
-let authenticateCustomer: typeof import("../../src/services/customerAuthService.js").authenticateCustomer;
+let authenticateCentralUser: typeof import("../../src/services/customerAuthService.js").authenticateCentralUser;
 let refreshCustomerSession: typeof import("../../src/services/customerAuthService.js").refreshCustomerSession;
 let logoutCustomer: typeof import("../../src/services/customerAuthService.js").logoutCustomer;
 
 beforeAll(async () => {
   ({ prisma } = await import("../../src/lib/prisma.js"));
-  ({ verifyFirebaseIdToken } = await import("../../src/lib/firebaseAdmin.js"));
-  ({ authenticateCustomer, refreshCustomerSession, logoutCustomer } = await import("../../src/services/customerAuthService.js"));
+  ({ authenticateCentralUser, refreshCustomerSession, logoutCustomer } = await import(
+    "../../src/services/customerAuthService.js"
+  ));
 });
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("authenticateCustomer", () => {
-  it("creates a new RestaurantUser using only server-verified Firebase identity", async () => {
-    verifyFirebaseIdToken.mockResolvedValue({ uid: "fb-uid-1", phone: "+919999999999" });
+describe("authenticateCentralUser", () => {
+  it("creates a new RestaurantUser when the phone has never logged in before", async () => {
     prisma.restaurantUser.findUnique.mockResolvedValue(null);
     prisma.restaurantUser.create.mockImplementation((args: any) => ({ id: "user-1", ...args.data }));
     prisma.refreshSession.create.mockResolvedValue({ id: "session-1" });
 
-    const result = await authenticateCustomer({ firebaseToken: "tok", name: "Rahul", player_id: undefined } as any);
+    const result = await authenticateCentralUser({ phone: "+919999999999", centralUserId: 42, name: "Rahul" });
 
     expect(result.isNewUser).toBe(true);
     expect(prisma.restaurantUser.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ firebaseUid: "fb-uid-1", phone: "+919999999999" }) }),
+      expect.objectContaining({ data: expect.objectContaining({ phone: "+919999999999", centralUserId: 42 }) }),
     );
-    // The phone number came from Firebase, never from client input (none was supplied here).
     expect(result.user.phone).toBe("+919999999999");
     expect(result.accessToken).toBeTruthy();
     expect(result.refreshToken).toBeTruthy();
+    expect(result.expiresIn).toBeGreaterThan(0);
   });
 
-  it("updates the existing user's player_id on a returning login", async () => {
-    verifyFirebaseIdToken.mockResolvedValue({ uid: "fb-uid-1", phone: "+919999999999" });
-    prisma.restaurantUser.findUnique.mockResolvedValue({ id: "user-1", firebaseUid: "fb-uid-1", phone: "+919999999999", name: "Rahul", email: null, playerId: "old-player" });
+  it("returns the existing user by phone untouched aside from backfilled fields — never recreated", async () => {
+    prisma.restaurantUser.findUnique.mockResolvedValue({
+      id: "user-1",
+      phone: "+919999999999",
+      name: "Rahul",
+      email: null,
+      playerId: "old-player",
+      centralUserId: null,
+    });
     prisma.restaurantUser.update.mockImplementation((args: any) => ({ id: "user-1", ...args.data }));
     prisma.refreshSession.create.mockResolvedValue({ id: "session-2" });
 
-    const result = await authenticateCustomer({ firebaseToken: "tok", playerId: "new-player-id" } as any);
+    const result = await authenticateCentralUser({ phone: "+919999999999", centralUserId: 42, playerId: "new-player-id" });
 
     expect(result.isNewUser).toBe(false);
+    expect(prisma.restaurantUser.create).not.toHaveBeenCalled();
     expect(prisma.restaurantUser.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ playerId: "new-player-id" }) }),
+      expect.objectContaining({
+        where: { id: "user-1" },
+        data: expect.objectContaining({ centralUserId: 42, playerId: "new-player-id" }),
+      }),
     );
   });
 });

@@ -1,44 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
-import { authenticateCustomer, logoutCustomer, refreshCustomerSession } from "../services/customerAuthService.js";
+import { logoutCustomer, refreshCustomerSession } from "../services/customerAuthService.js";
 import { asyncHandler, sendSuccess, validateBody } from "../utils/http.js";
 
 const router = Router();
 
-const authenticateSchema = z.object({
-  firebase_token: z.string().min(1, "firebase_token is required"),
-  name: z.string().trim().min(1).max(255).optional(),
-  email: z.email().optional(),
-  player_id: z.string().trim().min(1).optional(),
-});
-
-router.post(
-  "/authenticate",
-  asyncHandler(async (req, res) => {
-    const body = validateBody(authenticateSchema, req.body);
-    const { user, accessToken, refreshToken, isNewUser } = await authenticateCustomer({
-      firebaseToken: body.firebase_token,
-      name: body.name,
-      email: body.email,
-      playerId: body.player_id,
-    });
-
-    sendSuccess(
-      res,
-      {
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        user: {
-          id: user.id,
-          name: user.name,
-          phone: user.phone,
-          email: user.email,
-        },
-      },
-      isNewUser ? "Account created" : "Login successful",
-    );
-  }),
-);
+// Login/registration for this module now happens exclusively via the Darshan Admin
+// (central auth) server-to-server bridge — see POST /api/restaurant/auth and
+// RESTAURANT_CENTRAL_AUTH_SPEC.md. The app never calls a login endpoint here directly;
+// it only uses the session (access/refresh tokens) that bridge issues.
 
 const refreshSchema = z.object({ refresh_token: z.string().min(1, "refresh_token is required") });
 

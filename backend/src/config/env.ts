@@ -29,10 +29,13 @@ export const env = {
   superAdminEmail: process.env.SUPERADMIN_EMAIL,
   superAdminPassword: process.env.SUPERADMIN_PASSWORD,
 
-  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
-  firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
-  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY,
+  // Darshan Admin (central auth) server-to-server bridge — see
+  // RESTAURANT_CENTRAL_AUTH_SPEC.md. The app key is required: this endpoint mints
+  // real sessions, so it must never run open even by accidental misconfiguration.
+  restaurantAppApiKey: required("RESTAURANT_APP_API_KEY"),
+  centralAuthJwksUrl: process.env.CENTRAL_AUTH_JWKS_URL ?? "https://darshanadmin.bharatotel.com/api/darshan/auth/jwks.json",
+  centralAuthIssuer: process.env.CENTRAL_AUTH_ISSUER ?? "https://darshanadmin.bharatotel.com",
+  centralAuthAudience: process.env.CENTRAL_AUTH_AUDIENCE ?? "bharatotel-modules",
 
   razorpayKeyId: process.env.RAZORPAY_KEY_ID,
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
