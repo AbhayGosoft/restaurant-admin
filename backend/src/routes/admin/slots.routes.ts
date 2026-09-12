@@ -6,6 +6,7 @@ import { ApiError, asyncHandler, idParam, sendSuccess, validateBody } from "../.
 import { isValidTime12, to12Hour, to24Hour } from "../../utils/slotTime.js";
 
 // Mounted at /api/admin/restaurants/:restaurantId/slots
+// OpenAPI docs: src/docs/admin/slots.docs.ts
 const router = Router({ mergeParams: true });
 router.use(requireAdminAuth, requireRestaurantAccess("restaurantId"));
 

@@ -9,6 +9,7 @@ router.use(requireCustomerAuth);
 
 const querySchema = z.object({ filter: z.enum(["upcoming", "past"]).optional() });
 
+// OpenAPI docs: src/docs/myBookings.docs.ts
 router.get(
   "/",
   asyncHandler(async (req, res) => {

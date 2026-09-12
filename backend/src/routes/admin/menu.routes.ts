@@ -6,6 +6,7 @@ import { imageUrlSchema, resolveAssetUrl } from "../../utils/images.js";
 import { ApiError, asyncHandler, idParam, sendSuccess, validateBody } from "../../utils/http.js";
 
 // Mounted at /api/admin/restaurants/:restaurantId/menu (mergeParams so :restaurantId is visible here).
+// OpenAPI docs: src/docs/admin/menu.docs.ts
 const router = Router({ mergeParams: true });
 router.use(requireAdminAuth, requireRestaurantAccess("restaurantId"));
 

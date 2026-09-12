@@ -23,6 +23,7 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+// OpenAPI docs: src/docs/admin/bookings.docs.ts
 router.get(
   "/",
   asyncHandler(async (req, res) => {

@@ -38,6 +38,7 @@ const upload = multer({
 
 router.use(requireAdminAuth);
 
+// OpenAPI docs: src/docs/uploads.docs.ts
 router.post(
   "/images",
   upload.array("images", 10),

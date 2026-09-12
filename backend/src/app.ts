@@ -6,12 +6,14 @@ import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import path from "node:path";
+import swaggerUi from "swagger-ui-express";
 import { pinoHttp } from "pino-http";
 import type { Request } from "express";
 import { env } from "./config/env.js";
 import { errorHandler } from "./utils/http.js";
 import { requireClientKey } from "./middleware/auth.js";
 import { logger } from "./modules/logger.js";
+import { swaggerSpec } from "./config/swagger.js";
 
 import customerAuthRoutes from "./routes/customerAuth.routes.js";
 import restaurantCentralAuthRoutes from "./routes/restaurantCentralAuth.routes.js";
@@ -63,9 +65,13 @@ app.get("/", (_req, res) => {
   res.json({ name: "Restaurant Backend API", status: "ok", docs: "/api/health" });
 });
 
+// OpenAPI docs: src/docs/health.docs.ts
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+app.get("/api/docs.json", (_req, res) => res.json(swaggerSpec));
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { customSiteTitle: "Restaurant Backend API Docs" }));
 
 // Darshan Admin (central auth) server-to-server bridge — authenticated by its own
 // app key (see requireRestaurantAppKey), not the admin frontend's x-client-key, so

@@ -7,6 +7,7 @@ import { asyncHandler, sendSuccess, validateBody } from "../utils/http.js";
 const router = Router();
 router.use(requireCustomerAuth);
 
+// OpenAPI docs: src/docs/payments.docs.ts
 router.post(
   "/initiate",
   asyncHandler(async (req, res) => {

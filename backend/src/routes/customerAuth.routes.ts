@@ -12,6 +12,7 @@ const router = Router();
 
 const refreshSchema = z.object({ refresh_token: z.string().min(1, "refresh_token is required") });
 
+// OpenAPI docs: src/docs/customerAuth.docs.ts
 router.post(
   "/refresh",
   asyncHandler(async (req, res) => {

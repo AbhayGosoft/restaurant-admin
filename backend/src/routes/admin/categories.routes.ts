@@ -7,6 +7,7 @@ import { slugify } from "../../utils/query.js";
 
 const router = Router();
 
+// OpenAPI docs: src/docs/admin/categories.docs.ts
 router.get(
   "/",
   requireAdminAuth,

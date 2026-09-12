@@ -6,6 +6,7 @@ import { imageUrlSchema, resolveAssetUrl } from "../../utils/images.js";
 import { ApiError, asyncHandler, idParam, sendSuccess, validateBody, validateQuery } from "../../utils/http.js";
 import { pagination } from "../../utils/query.js";
 
+// OpenAPI docs: src/docs/admin/restaurants.docs.ts
 const router = Router();
 router.use(requireAdminAuth);
 

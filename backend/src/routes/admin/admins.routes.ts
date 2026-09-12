@@ -18,6 +18,7 @@ const adminSelect = {
   restaurants: { select: { restaurant: { select: { id: true, name: true } } } },
 } as const;
 
+// OpenAPI docs: src/docs/admin/admins.docs.ts
 router.get(
   "/",
   asyncHandler(async (_req, res) => {

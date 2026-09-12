@@ -20,6 +20,7 @@ const adminSummary = (admin: { id: string; name: string; email: string; role: st
   status: admin.status,
 });
 
+// OpenAPI docs: src/docs/adminAuth.docs.ts
 router.post(
   "/login",
   asyncHandler(async (req, res) => {

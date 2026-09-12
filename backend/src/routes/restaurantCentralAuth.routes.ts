@@ -19,8 +19,7 @@ const authSchema = z.object({
   player_id: z.string().trim().min(1).optional(),
 });
 
-// POST /api/restaurant/auth — called only by Darshan Admin (central auth), never the
-// app. See RESTAURANT_CENTRAL_AUTH_SPEC.md for the full contract.
+// OpenAPI docs: src/docs/restaurantCentralAuth.docs.ts
 router.post(
   "/auth",
   requireRestaurantAppKey,

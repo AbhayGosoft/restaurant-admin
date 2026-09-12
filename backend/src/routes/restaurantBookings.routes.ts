@@ -8,6 +8,7 @@ import { asyncHandler, idParam, sendSuccess, validateBody } from "../utils/http.
 const router = Router();
 router.use(requireCustomerAuth);
 
+// OpenAPI docs: src/docs/restaurantBookings.docs.ts
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
