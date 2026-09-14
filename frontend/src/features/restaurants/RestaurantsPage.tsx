@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, MapPin, Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import { ArrowLeft, ArrowRight, MapPin, Plus, Trash2, UtensilsCrossed } from "lucide-react";
 import { api, resolveAssetUrl } from "@/lib/api-client";
 import { queryClient } from "@/lib/query-client";
 import { useAppStore } from "@/store/app-store";
@@ -27,13 +27,31 @@ export function RestaurantsPage() {
   const navigate = useNavigate();
   const enterRestaurant = useAppStore((state) => state.enterRestaurant);
   const isSuperAdmin = useAppStore((state) => state.admin?.role === "SUPERADMIN");
+  const selectedAdmin = useAppStore((state) => state.selectedAdmin);
+  const exitAdminSelection = useAppStore((state) => state.exitAdminSelection);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const restaurants = useQuery({
-    queryKey: ["admin-restaurants", search],
-    queryFn: () => api<{ restaurants: Restaurant[] }>(`/admin/restaurants?${new URLSearchParams({ ...(search ? { search } : {}), limit: "100" })}`),
+    queryKey: ["admin-restaurants", search, selectedAdmin?.id ?? "self"],
+    queryFn: () =>
+      api<{ restaurants: Restaurant[] }>(
+        `/admin/restaurants?${new URLSearchParams({
+          ...(search ? { search } : {}),
+          ...(selectedAdmin ? { adminId: selectedAdmin.id } : {}),
+          limit: "100",
+        })}`,
+      ),
   });
+
+  // If this admin manages exactly one restaurant, skip the picker entirely and go
+  // straight into it — the list would otherwise be a pointless extra click.
+  useEffect(() => {
+    if (!search && restaurants.data?.restaurants.length === 1) {
+      const [only] = restaurants.data.restaurants;
+      enterRestaurant({ id: only.id, name: only.name, banner: only.banner });
+    }
+  }, [search, restaurants.data, enterRestaurant]);
 
   const { register, control, handleSubmit, reset, formState: { errors } } = useForm<CreateForm>({ defaultValues: emptyForm });
 
@@ -58,8 +76,15 @@ export function RestaurantsPage() {
 
   return (
     <main className="page">
+      {selectedAdmin && (
+        <Button type="button" variant="ghost" onClick={() => { exitAdminSelection(); navigate("/"); }}>
+          <ArrowLeft size={14} /> Back to admins
+        </Button>
+      )}
       <section className="resource-head">
-        <span className="eyebrow"><UtensilsCrossed size={14} /> Restaurants</span>
+        <span className="eyebrow">
+          <UtensilsCrossed size={14} /> {selectedAdmin ? `${selectedAdmin.name}'s restaurants` : "Restaurants"}
+        </span>
         <Button type="button" onClick={() => { reset(emptyForm); setDialogOpen(true); }}><Plus size={17} /> Add restaurant</Button>
       </section>
 
@@ -68,7 +93,16 @@ export function RestaurantsPage() {
       {restaurants.isLoading && <LoadingGrid />}
       {restaurants.isError && <StateView title="Couldn't load restaurants" message="Check the backend connection and try once more." action={() => void restaurants.refetch()} />}
       {restaurants.isSuccess && !restaurants.data.restaurants.length && (
-        <StateView title="No restaurants yet" message={isSuperAdmin ? "Add the first restaurant to get started." : "You haven't been assigned to any restaurant yet. Contact your SuperAdmin."} />
+        <StateView
+          title="No restaurants yet"
+          message={
+            selectedAdmin
+              ? `${selectedAdmin.name} hasn't been assigned to any restaurant yet.`
+              : isSuperAdmin
+                ? "Add the first restaurant to get started."
+                : "You haven't been assigned to any restaurant yet. Contact your SuperAdmin."
+          }
+        />
       )}
 
       <div className="card-grid">

@@ -12,11 +12,15 @@
  *         name: search
  *         schema: { type: string }
  *       - in: query
+ *         name: adminId
+ *         schema: { type: string, format: uuid }
+ *         description: SuperAdmin only — list restaurants managed by this specific admin instead of the caller's own assignments.
+ *       - in: query
  *         name: page
  *         schema: { type: integer, minimum: 1, default: 1 }
  *       - in: query
  *         name: limit
- *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+ *         schema: { type: integer, minimum: 1, maximum: 500, default: 20 }
  *     responses:
  *       200:
  *         description: Paginated restaurant list

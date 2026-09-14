@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Pencil, Plus, ShieldCheck, Trash2, UserCog } from "lucide-react";
+import { ArrowRight, Pencil, Plus, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { queryClient } from "@/lib/query-client";
+import { useAppStore } from "@/store/app-store";
 import type { AdminUser, Restaurant } from "@/types/domain";
 import { Button } from "@/components/ui/Button";
 import { PasswordInput } from "@/components/ui/PasswordInput";
@@ -13,6 +15,8 @@ import { CheckboxList, DialogFooter, FieldError, ResourceDialog, Req, cleanBody 
 type AdminForm = { name: string; email: string; password: string; role: "ADMIN" | "SUPERADMIN" };
 
 export function AdminsPage() {
+  const navigate = useNavigate();
+  const selectAdmin = useAppStore((state) => state.selectAdmin);
   const admins = useQuery({ queryKey: ["admins"], queryFn: () => api<AdminUser[]>("/admin/admins") });
   const restaurants = useQuery({ queryKey: ["admin-restaurants", ""], queryFn: () => api<{ restaurants: Restaurant[] }>("/admin/restaurants?limit=200") });
   const [dialog, setDialog] = useState<AdminUser | "new" | null>(null);
@@ -44,6 +48,11 @@ export function AdminsPage() {
     setDialog(admin);
   };
 
+  const enter = (admin: AdminUser) => {
+    selectAdmin({ id: admin.id, name: admin.name });
+    navigate("/");
+  };
+
   if (admins.isLoading) return <main className="page"><LoadingGrid /></main>;
   if (admins.isError) return <main className="page"><StateView title="Couldn't load admins" message="Check the backend connection and try once more." action={() => void admins.refetch()} /></main>;
 
@@ -59,15 +68,16 @@ export function AdminsPage() {
           <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Restaurants</th><th>Status</th><th /></tr></thead>
           <tbody>
             {admins.data?.map((admin) => (
-              <tr key={admin.id}>
+              <tr key={admin.id} className="data-table__row" onClick={() => enter(admin)}>
                 <td>{admin.name}</td>
                 <td>{admin.email}</td>
                 <td>{admin.role === "SUPERADMIN" ? <span className="badge"><ShieldCheck size={12} /> SuperAdmin</span> : "Admin"}</td>
                 <td>{(admin.restaurants ?? []).map((r) => r.restaurant.name).join(", ") || "—"}</td>
                 <td><span className={`badge badge--${admin.status.toLowerCase()}`}>{admin.status}</span></td>
                 <td>
-                  <button type="button" className="icon-button" aria-label="Edit admin" onClick={() => openEdit(admin)}><Pencil size={15} /></button>
-                  <button type="button" className="icon-button" aria-label="Deactivate admin" onClick={() => deactivate.mutate(admin.id)}><Trash2 size={15} /></button>
+                  <button type="button" className="icon-button" aria-label="Edit admin" onClick={(event) => { event.stopPropagation(); openEdit(admin); }}><Pencil size={15} /></button>
+                  <button type="button" className="icon-button" aria-label="Deactivate admin" onClick={(event) => { event.stopPropagation(); deactivate.mutate(admin.id); }}><Trash2 size={15} /></button>
+                  <button type="button" className="icon-button" aria-label={`View ${admin.name}'s restaurants`} onClick={(event) => { event.stopPropagation(); enter(admin); }}><ArrowRight size={15} /></button>
                 </td>
               </tr>
             ))}

@@ -44,15 +44,26 @@ const toAdminRestaurant = (restaurant: any) => ({
 
 const listQuerySchema = z.object({
   search: z.string().trim().optional(),
+  adminId: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  // Capped at 500 rather than 100 because AdminsPage fetches up to 200 in one shot to
+  // populate the "assigned restaurants" checkbox list, not just to paginate a table.
+  limit: z.coerce.number().int().min(1).max(500).default(20),
 });
 
 router.get(
   "/",
   asyncHandler(async (req, res) => {
     const query = validateQuery(listQuerySchema, req.query);
-    const scopedWhere = req.admin!.role === "SUPERADMIN" ? {} : { admins: { some: { adminId: req.admin!.id } } };
+    // A plain Admin is always scoped to their own assignments. Only a SuperAdmin may look
+    // up another admin's restaurants via ?adminId= (e.g. drilling into a specific admin
+    // from the SuperAdmin admin-picker flow) — a non-SuperAdmin passing it is just ignored.
+    const scopedWhere =
+      req.admin!.role === "SUPERADMIN"
+        ? query.adminId
+          ? { admins: { some: { adminId: query.adminId } } }
+          : {}
+        : { admins: { some: { adminId: req.admin!.id } } };
     const where = {
       ...scopedWhere,
       ...(query.search ? { OR: [{ name: { contains: query.search } }, { city: { contains: query.search } }] } : {}),

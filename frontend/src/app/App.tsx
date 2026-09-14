@@ -16,9 +16,21 @@ import { ProfilePage } from "@/features/profile/ProfilePage";
 export function App() {
   const token = useAppStore((state) => state.adminToken);
   const role = useAppStore((state) => state.admin?.role);
+  const selectedAdmin = useAppStore((state) => state.selectedAdmin);
   const activeRestaurant = useAppStore((state) => state.activeRestaurant);
 
   if (!token) return <LoginPage />;
+
+  // SuperAdmin must pick an admin first (Admins list -> that admin's restaurants -> a
+  // restaurant's workspace). A plain Admin skips straight to their own restaurants.
+  if (role === "SUPERADMIN" && !selectedAdmin && !activeRestaurant) {
+    return (
+      <Routes>
+        <Route path="/" element={<AdminsPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
 
   if (!activeRestaurant) {
     return (

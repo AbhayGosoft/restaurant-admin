@@ -20,13 +20,18 @@ export function BackButtonProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Switching between the restaurant picker and the workspace happens via app state
-      // (activeRestaurant), not the URL, so browser history has nothing to go back to
-      // here — without this, back on the dashboard's "/" would exit the app instead of
-      // returning to the picker.
-      const { activeRestaurant, exitWorkspace } = useAppStore.getState();
+      // Switching between the admin picker, the restaurant picker, and the workspace
+      // happens via app state (selectedAdmin / activeRestaurant), not the URL, so
+      // browser history has nothing to go back to here — without this, back on the
+      // dashboard's or restaurant picker's "/" would exit the app instead of stepping
+      // up one level.
+      const { activeRestaurant, exitWorkspace, selectedAdmin, exitAdminSelection } = useAppStore.getState();
       if (activeRestaurant) {
         exitWorkspace();
+        return;
+      }
+      if (selectedAdmin) {
+        exitAdminSelection();
         return;
       }
 
