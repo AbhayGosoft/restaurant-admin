@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -43,15 +43,6 @@ export function RestaurantsPage() {
         })}`,
       ),
   });
-
-  // If this admin manages exactly one restaurant, skip the picker entirely and go
-  // straight into it — the list would otherwise be a pointless extra click.
-  useEffect(() => {
-    if (!search && restaurants.data?.restaurants.length === 1) {
-      const [only] = restaurants.data.restaurants;
-      enterRestaurant({ id: only.id, name: only.name, banner: only.banner });
-    }
-  }, [search, restaurants.data, enterRestaurant]);
 
   const { register, control, handleSubmit, reset, formState: { errors } } = useForm<CreateForm>({ defaultValues: emptyForm });
 
