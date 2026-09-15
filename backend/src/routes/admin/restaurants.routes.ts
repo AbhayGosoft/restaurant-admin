@@ -89,6 +89,10 @@ const createSchema = z.object({
   banner: imageUrlSchema.optional(),
   gallery: z.array(imageUrlSchema).default([]),
   categoryIds: z.array(z.string().uuid()).default([]),
+  // Only honored when the requester is a SUPERADMIN browsing a specific admin's scoped
+  // restaurant list — lets "Add restaurant" from that view assign it to that admin instead
+  // of creating an orphaned restaurant nobody but an unscoped SuperAdmin can see.
+  adminId: z.string().uuid().optional(),
   cuisineLabel: z.string().trim().min(1),
   isPureVeg: z.boolean().default(false),
   prepTimeMin: z.coerce.number().int().min(0),
@@ -113,13 +117,20 @@ router.post(
   "/",
   asyncHandler(async (req, res) => {
     const body = validateBody(createSchema, req.body);
-    const { categoryIds, ...rest } = body;
+    const { categoryIds, adminId, ...rest } = body;
+
+    const assignedAdminIds =
+      req.admin!.role === "ADMIN"
+        ? [req.admin!.id]
+        : adminId
+          ? [adminId]
+          : [];
 
     const restaurant = await prisma.restaurant.create({
       data: {
         ...rest,
         categories: { create: categoryIds.map((categoryId) => ({ categoryId })) },
-        ...(req.admin!.role === "ADMIN" ? { admins: { create: { adminId: req.admin!.id } } } : {}),
+        ...(assignedAdminIds.length ? { admins: { create: assignedAdminIds.map((id) => ({ adminId: id })) } } : {}),
       },
       include: restaurantInclude,
     });

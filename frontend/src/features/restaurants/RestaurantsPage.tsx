@@ -56,7 +56,11 @@ export function RestaurantsPage() {
   const { register, control, handleSubmit, reset, formState: { errors } } = useForm<CreateForm>({ defaultValues: emptyForm });
 
   const create = useMutation({
-    mutationFn: (data: CreateForm) => api<Restaurant>("/admin/restaurants", { method: "POST", body: cleanBody(data) }),
+    mutationFn: (data: CreateForm) =>
+      api<Restaurant>("/admin/restaurants", {
+        method: "POST",
+        body: cleanBody(selectedAdmin ? { ...data, adminId: selectedAdmin.id } : data),
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["admin-restaurants"] });
       reset(emptyForm);
