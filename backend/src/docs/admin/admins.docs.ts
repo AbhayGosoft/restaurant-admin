@@ -65,7 +65,7 @@
  * /api/admin/admins/{id}:
  *   patch:
  *     tags: [Admins]
- *     summary: Update an admin account (SuperAdmin only)
+ *     summary: Update an admin account (SuperAdmin only). Set status to ACTIVE to reactivate a deactivated admin.
  *     security:
  *       - ClientKey: []
  *       - AdminBearer: []
@@ -92,6 +92,11 @@
  *         content:
  *           application/json:
  *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       400:
+ *         description: Cannot deactivate your own account
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/ErrorEnvelope" }
  *       401:
  *         $ref: "#/components/responses/Unauthorized"
  *       403:

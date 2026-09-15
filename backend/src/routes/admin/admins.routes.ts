@@ -70,6 +70,10 @@ router.patch(
     const id = idParam(req);
     const body = validateBody(updateSchema, req.body);
 
+    if (body.status === "INACTIVE" && id === req.admin!.id) {
+      throw new ApiError(400, "You cannot deactivate your own account");
+    }
+
     if (body.restaurantIds) {
       await prisma.adminRestaurant.deleteMany({ where: { adminId: id } });
     }

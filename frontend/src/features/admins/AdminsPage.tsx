@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, Pencil, Plus, ShieldCheck, Trash2, UserCog } from "lucide-react";
+import { ArrowRight, Pencil, Plus, ShieldCheck, UserCog } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { queryClient } from "@/lib/query-client";
 import { useAppStore } from "@/store/app-store";
@@ -12,7 +12,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { LoadingGrid, StateView } from "@/components/ui/StateView";
 import { CheckboxList, DialogFooter, FieldError, ResourceDialog, Req, cleanBody } from "@/components/resource/dialog-kit";
 
-type AdminForm = { name: string; email: string; password: string; role: "ADMIN" | "SUPERADMIN" };
+type AdminForm = { name: string; email: string; password: string; role: "ADMIN" | "SUPERADMIN"; isActive: boolean };
 
 export function AdminsPage() {
   const navigate = useNavigate();
@@ -22,13 +22,14 @@ export function AdminsPage() {
   const [dialog, setDialog] = useState<AdminUser | "new" | null>(null);
   const [selectedRestaurantIds, setSelectedRestaurantIds] = useState<string[]>([]);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<AdminForm>({ defaultValues: { name: "", email: "", password: "", role: "ADMIN" } });
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<AdminForm>({ defaultValues: { name: "", email: "", password: "", role: "ADMIN", isActive: true } });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admins"] });
 
   const save = useMutation({
     mutationFn: (data: AdminForm) => {
-      const body = cleanBody({ ...data, restaurantIds: selectedRestaurantIds });
+      const { isActive, ...rest } = data;
+      const body = cleanBody({ ...rest, status: isActive ? "ACTIVE" : "INACTIVE", restaurantIds: selectedRestaurantIds });
       return dialog !== "new" && dialog
         ? api(`/admin/admins/${dialog.id}`, { method: "PATCH", body })
         : api("/admin/admins", { method: "POST", body });
@@ -36,14 +37,9 @@ export function AdminsPage() {
     onSuccess: async () => { await invalidate(); setDialog(null); },
   });
 
-  const deactivate = useMutation({
-    mutationFn: (id: string) => api(`/admin/admins/${id}`, { method: "DELETE" }),
-    onSuccess: () => void invalidate(),
-  });
-
-  const openNew = () => { reset({ name: "", email: "", password: "", role: "ADMIN" }); setSelectedRestaurantIds([]); setDialog("new"); };
+  const openNew = () => { reset({ name: "", email: "", password: "", role: "ADMIN", isActive: true }); setSelectedRestaurantIds([]); setDialog("new"); };
   const openEdit = (admin: AdminUser) => {
-    reset({ name: admin.name, email: admin.email, password: "", role: admin.role });
+    reset({ name: admin.name, email: admin.email, password: "", role: admin.role, isActive: admin.status === "ACTIVE" });
     setSelectedRestaurantIds((admin.restaurants ?? []).map((r) => r.restaurant.id));
     setDialog(admin);
   };
@@ -76,7 +72,6 @@ export function AdminsPage() {
                 <td><span className={`badge badge--${admin.status.toLowerCase()}`}>{admin.status}</span></td>
                 <td>
                   <button type="button" className="icon-button" aria-label="Edit admin" onClick={(event) => { event.stopPropagation(); openEdit(admin); }}><Pencil size={15} /></button>
-                  <button type="button" className="icon-button" aria-label="Deactivate admin" onClick={(event) => { event.stopPropagation(); deactivate.mutate(admin.id); }}><Trash2 size={15} /></button>
                   <button type="button" className="icon-button" aria-label={`View ${admin.name}'s restaurants`} onClick={(event) => { event.stopPropagation(); enter(admin); }}><ArrowRight size={15} /></button>
                 </td>
               </tr>
@@ -96,6 +91,9 @@ export function AdminsPage() {
                 <FieldError error={errors.password} />
               </label>
               <label>Role<select {...register("role")}><option value="ADMIN">Admin</option><option value="SUPERADMIN">SuperAdmin</option></select></label>
+              {dialog !== "new" && (
+                <label className="check-option"><input type="checkbox" {...register("isActive")} /><span>Active</span></label>
+              )}
               {restaurants.data && (
                 <CheckboxList title="Assigned restaurants" items={restaurants.data.restaurants.map((r) => ({ id: r.id, label: r.name }))} selected={selectedRestaurantIds} onChange={setSelectedRestaurantIds} />
               )}
