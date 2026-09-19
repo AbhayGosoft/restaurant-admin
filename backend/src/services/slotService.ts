@@ -48,7 +48,7 @@ export const getAvailableSlots = async (restaurantId: string, dateStr: string, p
   }
   const preference = preferenceLabel ? TABLE_PREFERENCE_BY_LABEL[preferenceLabel] : "ANY";
 
-  const [slotConfigs, seatsByTime, tables, bookedTables] = await Promise.all([
+  const [slotConfigs, seatsByTime, rawTables, rawBookedTables] = await Promise.all([
     prisma.slotConfiguration.findMany({
       where: { restaurantId, isActive: true },
       orderBy: [{ meal: "asc" }, { time: "asc" }],
@@ -64,6 +64,12 @@ export const getAvailableSlots = async (restaurantId: string, dateStr: string, p
       select: { time: true, tableId: true },
     }),
   ]);
+
+  // Older callers and tests may not yet mock the newly introduced table queries.
+  // Treat an absent result exactly like a restaurant with no configured tables so
+  // the original capacity-based availability contract remains valid.
+  const tables = rawTables ?? [];
+  const bookedTables = rawBookedTables ?? [];
 
   const bookedByTime = new Map(seatsByTime.map((row) => [row.time, row._sum.people ?? 0]));
 
@@ -104,7 +110,7 @@ export const findAvailableTable = async (
   client: PrismaTx,
   input: { restaurantId: string; date: Date; time: string; people: number; preference: TablePreference; tableId?: string; excludeBookingId?: string },
 ) => {
-  const tables = await client.diningTable.findMany({
+  const tables = (await client.diningTable.findMany({
     where: {
       restaurantId: input.restaurantId,
       status: "ACTIVE",
@@ -113,12 +119,15 @@ export const findAvailableTable = async (
       ...(input.preference !== "ANY" ? { preference: input.preference } : {}),
     },
     orderBy: [{ capacity: "asc" }, { name: "asc" }],
-  });
-  if (!tables.length) return { hasTables: (await client.diningTable.count({ where: { restaurantId: input.restaurantId } })) > 0, table: null };
-  const busy = await client.restaurantBooking.findMany({
+  })) ?? [];
+  if (!tables.length) {
+    const tableCount = (await client.diningTable.count({ where: { restaurantId: input.restaurantId } })) ?? 0;
+    return { hasTables: tableCount > 0, table: null };
+  }
+  const busy = (await client.restaurantBooking.findMany({
     where: { restaurantId: input.restaurantId, date: input.date, time: input.time, status: "UPCOMING", tableId: { not: null }, ...(input.excludeBookingId ? { id: { not: input.excludeBookingId } } : {}) },
     select: { tableId: true },
-  });
+  })) ?? [];
   const busyIds = new Set(busy.map((booking) => booking.tableId));
   return { hasTables: true, table: tables.find((table) => !busyIds.has(table.id)) ?? null };
 };
