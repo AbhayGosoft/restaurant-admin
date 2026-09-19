@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/auth/login:
  *   post:
- *     tags: [Admin Auth]
+ *     tags: ["Admin: Auth"]
  *     summary: Admin/SuperAdmin login
  *     requestBody:
  *       required: true
@@ -42,7 +42,7 @@
  * @openapi
  * /api/admin/auth/me:
  *   get:
- *     tags: [Admin Auth]
+ *     tags: ["Admin: Auth"]
  *     summary: Get the current admin's profile
  *     security:
  *       - ClientKey: []
@@ -66,7 +66,7 @@
  * @openapi
  * /api/admin/auth/change-password:
  *   patch:
- *     tags: [Admin Auth]
+ *     tags: ["Admin: Auth"]
  *     summary: Change the current admin's password
  *     security:
  *       - ClientKey: []

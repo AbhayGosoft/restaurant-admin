@@ -2,7 +2,7 @@
  * @openapi
  * /api/uploads/images:
  *   post:
- *     tags: [Uploads]
+ *     tags: ["Admin: Uploads"]
  *     summary: Upload up to 10 images (JPEG/PNG/WebP/GIF, 5MB each)
  *     security:
  *       - ClientKey: []

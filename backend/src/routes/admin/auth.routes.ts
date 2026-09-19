@@ -1,9 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import { z } from "zod";
-import { prisma } from "../lib/prisma.js";
-import { requireAdminAuth, signAdminToken } from "../middleware/auth.js";
-import { ApiError, asyncHandler, sendSuccess, validateBody } from "../utils/http.js";
+import { prisma } from "../../lib/prisma.js";
+import { requireAdminAuth, signAdminToken } from "../../middleware/auth.js";
+import { ApiError, asyncHandler, sendSuccess, validateBody } from "../../utils/http.js";
 
 const router = Router();
 
@@ -20,7 +20,7 @@ const adminSummary = (admin: { id: string; name: string; email: string; role: st
   status: admin.status,
 });
 
-// OpenAPI docs: src/docs/adminAuth.docs.ts
+// OpenAPI docs: src/docs/admin/auth.docs.ts
 router.post(
   "/login",
   asyncHandler(async (req, res) => {

@@ -2,7 +2,7 @@
  * @openapi
  * /api/restaurant-bookings/{id}:
  *   get:
- *     tags: [Bookings]
+ *     tags: ["User: Bookings"]
  *     summary: Get one of the signed-in customer's bookings by id
  *     security:
  *       - ClientKey: []
@@ -28,7 +28,7 @@
  * @openapi
  * /api/restaurant-bookings/{id}:
  *   patch:
- *     tags: [Bookings]
+ *     tags: ["User: Bookings"]
  *     summary: Modify date/time/party size of a booking
  *     security:
  *       - ClientKey: []
@@ -67,7 +67,7 @@
  * @openapi
  * /api/restaurant-bookings/{id}/cancel:
  *   post:
- *     tags: [Bookings]
+ *     tags: ["User: Bookings"]
  *     summary: Cancel a booking
  *     security:
  *       - ClientKey: []

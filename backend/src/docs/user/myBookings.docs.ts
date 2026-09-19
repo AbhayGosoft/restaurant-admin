@@ -2,7 +2,7 @@
  * @openapi
  * /api/my-restaurant-bookings:
  *   get:
- *     tags: [Bookings]
+ *     tags: ["User: Bookings"]
  *     summary: List the signed-in customer's bookings
  *     security:
  *       - ClientKey: []

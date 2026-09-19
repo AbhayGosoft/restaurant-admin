@@ -15,15 +15,17 @@ import { requireClientKey } from "./middleware/auth.js";
 import { logger } from "./modules/logger.js";
 import { swaggerSpec } from "./config/swagger.js";
 
-import customerAuthRoutes from "./routes/customerAuth.routes.js";
 import restaurantCentralAuthRoutes from "./routes/restaurantCentralAuth.routes.js";
-import adminAuthRoutes from "./routes/adminAuth.routes.js";
-import restaurantsRoutes from "./routes/restaurants.routes.js";
-import paymentsRoutes from "./routes/payments.routes.js";
-import myBookingsRoutes from "./routes/myBookings.routes.js";
-import restaurantBookingsRoutes from "./routes/restaurantBookings.routes.js";
-import uploadsRoutes from "./routes/uploads.routes.js";
 
+// User-facing (customer app): only endpoints the app's own users may call.
+import userAuthRoutes from "./routes/user/auth.routes.js";
+import userRestaurantsRoutes from "./routes/user/restaurants.routes.js";
+import userPaymentsRoutes from "./routes/user/payments.routes.js";
+import userMyBookingsRoutes from "./routes/user/myBookings.routes.js";
+import userRestaurantBookingsRoutes from "./routes/user/restaurantBookings.routes.js";
+
+// Admin / SuperAdmin (back office): everything gated behind requireAdminAuth.
+import adminAuthRoutes from "./routes/admin/auth.routes.js";
 import adminAdminsRoutes from "./routes/admin/admins.routes.js";
 import adminRestaurantsRoutes from "./routes/admin/restaurants.routes.js";
 import adminMenuRoutes from "./routes/admin/menu.routes.js";
@@ -31,6 +33,7 @@ import adminSlotsRoutes from "./routes/admin/slots.routes.js";
 import adminTablesRoutes from "./routes/admin/tables.routes.js";
 import adminBookingsRoutes from "./routes/admin/bookings.routes.js";
 import adminCategoriesRoutes from "./routes/admin/categories.routes.js";
+import adminUploadsRoutes from "./routes/admin/uploads.routes.js";
 
 export const app = express();
 
@@ -81,14 +84,14 @@ app.use("/api/restaurant", restaurantCentralAuthRoutes);
 
 app.use("/api", requireClientKey);
 
-// Customer-facing
-app.use("/api/auth", customerAuthRoutes);
-app.use("/api/restaurants", restaurantsRoutes);
-app.use("/api/payments", paymentsRoutes);
-app.use("/api/my-restaurant-bookings", myBookingsRoutes);
-app.use("/api/restaurant-bookings", restaurantBookingsRoutes);
+// User (customer app) — only endpoints the app's own users may call.
+app.use("/api/auth", userAuthRoutes);
+app.use("/api/restaurants", userRestaurantsRoutes);
+app.use("/api/payments", userPaymentsRoutes);
+app.use("/api/my-restaurant-bookings", userMyBookingsRoutes);
+app.use("/api/restaurant-bookings", userRestaurantBookingsRoutes);
 
-// Admin / SuperAdmin
+// Admin / SuperAdmin — everything gated behind requireAdminAuth.
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/admin/admins", adminAdminsRoutes);
 app.use("/api/admin/categories", adminCategoriesRoutes);
@@ -97,7 +100,9 @@ app.use("/api/admin/restaurants/:restaurantId/slots", adminSlotsRoutes);
 app.use("/api/admin/restaurants/:restaurantId/tables", adminTablesRoutes);
 app.use("/api/admin/restaurants", adminRestaurantsRoutes);
 app.use("/api/admin/bookings", adminBookingsRoutes);
-app.use("/api/uploads", uploadsRoutes);
+// Mounted at /api/uploads (not /api/admin/uploads) to match the existing frontend
+// contract; the route file itself lives under routes/admin/ since it requires admin auth.
+app.use("/api/uploads", adminUploadsRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: false, message: "Route not found" });

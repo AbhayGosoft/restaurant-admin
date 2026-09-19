@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireCustomerAuth } from "../middleware/auth.js";
-import { getRestaurantDetail, listRestaurants } from "../services/restaurantService.js";
-import { getMenu } from "../services/menuService.js";
-import { getAvailableSlots } from "../services/slotService.js";
-import { createBooking } from "../services/bookingService.js";
-import { TABLE_PREFERENCE_LABELS } from "../constants/bookingOptions.js";
-import { asyncHandler, idParam, sendSuccess, validateBody, validateQuery } from "../utils/http.js";
+import { requireCustomerAuth } from "../../middleware/auth.js";
+import { getRestaurantDetail, listRestaurants } from "../../services/restaurantService.js";
+import { getMenu } from "../../services/menuService.js";
+import { getAvailableSlots, getTableAvailability } from "../../services/slotService.js";
+import { createBooking } from "../../services/bookingService.js";
+import { TABLE_PREFERENCE_LABELS } from "../../constants/bookingOptions.js";
+import { asyncHandler, idParam, sendSuccess, validateBody, validateQuery } from "../../utils/http.js";
 
 const router = Router();
 
@@ -22,7 +22,7 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-// OpenAPI docs: src/docs/restaurants.docs.ts
+// OpenAPI docs: src/docs/user/restaurants.docs.ts
 router.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -67,6 +67,23 @@ router.get(
     const query = validateQuery(slotsQuerySchema, req.query);
     const slots = await getAvailableSlots(id, query.date, query.people, query.tablePreference);
     sendSuccess(res, slots);
+  }),
+);
+
+const tableAvailabilityQuerySchema = z.object({
+  date: z.string().min(1, "date is required"),
+  time: z.string().min(1, "time is required"),
+  people: z.coerce.number().int().min(1).default(1),
+  tablePreference: z.enum(Object.values(TABLE_PREFERENCE_LABELS) as [string, ...string[]]).optional(),
+});
+
+router.get(
+  "/:id/tables/availability",
+  asyncHandler(async (req, res) => {
+    const id = idParam(req);
+    const query = validateQuery(tableAvailabilityQuerySchema, req.query);
+    const availability = await getTableAvailability(id, query.date, query.time, query.people, query.tablePreference);
+    sendSuccess(res, availability);
   }),
 );
 

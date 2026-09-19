@@ -20,22 +20,30 @@ const options: swaggerJsdoc.Options = {
         "the admin/superadmin back office, and the Darshan Admin central-auth server-to-server bridge.",
     },
     servers: [{ url: `${env.publicOrigin}`, description: env.nodeEnv === "production" ? "Production" : "Current environment" }],
-    // Tags are resource-based, not role-based: an admin and a customer endpoint for the same
-    // resource (e.g. slots) share one tag, distinguished within the operation by its `security`
-    // and path rather than by a separate "Admin: X" heading per role.
+    // Tags are role-based first, resource-based second ("User: X" / "Admin: X"), so Swagger UI
+    // groups into a User section and an Admin section instead of interleaving both roles under
+    // one resource heading. Listed in that order here since swagger-ui-express preserves it.
     tags: [
       { name: "Health", description: "Service health check" },
       { name: "Restaurant Central Auth", description: "Server-to-server bridge used only by Darshan Admin (central auth) to mint app sessions" },
-      { name: "Customer Auth", description: "Session refresh/logout for the app (login/registration happens via the central auth bridge)" },
-      { name: "Admin Auth", description: "Admin/SuperAdmin login and account" },
-      { name: "Restaurants", description: "Restaurant discovery and management (customer read access, admin/superadmin write access)" },
-      { name: "Menu", description: "Menu categories and items (customer read access, admin write access)" },
-      { name: "Slots", description: "Booking slot configuration and availability (customer read access, admin write access)" },
-      { name: "Bookings", description: "Bookings (customer's own, plus admin/superadmin management across restaurants)" },
-      { name: "Payments", description: "Razorpay payment order creation and verification" },
-      { name: "Categories", description: "Restaurant category taxonomy (superadmin write, admin read)" },
-      { name: "Admins", description: "Admin account management (superadmin only)" },
-      { name: "Uploads", description: "Image uploads" },
+
+      { name: "User: Auth", description: "Session refresh/logout for the app (login/registration happens via the central auth bridge)" },
+      { name: "User: Restaurants", description: "Restaurant discovery (read-only)" },
+      { name: "User: Menu", description: "Menu categories and items (read-only)" },
+      { name: "User: Slots", description: "Booking slot availability" },
+      { name: "User: Tables", description: "Physical table availability for a specific date/time/party size" },
+      { name: "User: Bookings", description: "The signed-in customer's own bookings and pre-orders" },
+      { name: "User: Payments", description: "Razorpay payment order creation and verification" },
+
+      { name: "Admin: Auth", description: "Admin/SuperAdmin login and account" },
+      { name: "Admin: Restaurants", description: "Restaurant management (admin/superadmin write access)" },
+      { name: "Admin: Menu", description: "Menu categories and items (admin write access)" },
+      { name: "Admin: Slots", description: "Booking slot configuration" },
+      { name: "Admin: Tables", description: "Physical table management and availability" },
+      { name: "Admin: Bookings", description: "Booking management across restaurants" },
+      { name: "Admin: Categories", description: "Restaurant category taxonomy (superadmin write, admin read)" },
+      { name: "Admin: Admins", description: "Admin account management (superadmin only)" },
+      { name: "Admin: Uploads", description: "Image uploads" },
     ],
     components: {
       securitySchemes: {

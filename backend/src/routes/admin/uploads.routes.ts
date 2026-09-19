@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { Router } from "express";
 import multer from "multer";
-import { requireAdminAuth } from "../middleware/auth.js";
-import { ApiError, asyncHandler } from "../utils/http.js";
+import { requireAdminAuth } from "../../middleware/auth.js";
+import { ApiError, asyncHandler } from "../../utils/http.js";
 
 const router = Router();
 const uploadDir = path.resolve(process.cwd(), "uploads", "images");
@@ -38,7 +38,7 @@ const upload = multer({
 
 router.use(requireAdminAuth);
 
-// OpenAPI docs: src/docs/uploads.docs.ts
+// OpenAPI docs: src/docs/admin/uploads.docs.ts
 router.post(
   "/images",
   upload.array("images", 10),

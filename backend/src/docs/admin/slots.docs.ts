@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/slots:
  *   get:
- *     tags: [Slots]
+ *     tags: ["Admin: Slots"]
  *     summary: List a restaurant's booking slot configuration
  *     security:
  *       - ClientKey: []
@@ -28,7 +28,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/slots:
  *   post:
- *     tags: [Slots]
+ *     tags: ["Admin: Slots"]
  *     summary: Create a booking slot
  *     security:
  *       - ClientKey: []
@@ -68,7 +68,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/slots/{slotId}:
  *   patch:
- *     tags: [Slots]
+ *     tags: ["Admin: Slots"]
  *     summary: Update a booking slot
  *     security:
  *       - ClientKey: []
@@ -112,7 +112,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/slots/{slotId}:
  *   delete:
- *     tags: [Slots]
+ *     tags: ["Admin: Slots"]
  *     summary: Deactivate a booking slot
  *     security:
  *       - ClientKey: []

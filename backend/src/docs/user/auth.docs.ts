@@ -2,7 +2,7 @@
  * @openapi
  * /api/auth/refresh:
  *   post:
- *     tags: [Customer Auth]
+ *     tags: ["User: Auth"]
  *     summary: Exchange a refresh token for a new access/refresh token pair
  *     requestBody:
  *       required: true
@@ -38,7 +38,7 @@
  * @openapi
  * /api/auth/logout:
  *   post:
- *     tags: [Customer Auth]
+ *     tags: ["User: Auth"]
  *     summary: Revoke a refresh token
  *     requestBody:
  *       required: true

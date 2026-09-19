@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/admins:
  *   get:
- *     tags: [Admins]
+ *     tags: ["Admin: Admins"]
  *     summary: List admin accounts (SuperAdmin only)
  *     security:
  *       - ClientKey: []
@@ -23,7 +23,7 @@
  * @openapi
  * /api/admin/admins:
  *   post:
- *     tags: [Admins]
+ *     tags: ["Admin: Admins"]
  *     summary: Create an admin account (SuperAdmin only)
  *     security:
  *       - ClientKey: []
@@ -64,7 +64,7 @@
  * @openapi
  * /api/admin/admins/{id}:
  *   patch:
- *     tags: [Admins]
+ *     tags: ["Admin: Admins"]
  *     summary: Update an admin account (SuperAdmin only). Set status to ACTIVE to reactivate a deactivated admin.
  *     security:
  *       - ClientKey: []
@@ -111,7 +111,7 @@
  * @openapi
  * /api/admin/admins/{id}:
  *   delete:
- *     tags: [Admins]
+ *     tags: ["Admin: Admins"]
  *     summary: Deactivate an admin account (SuperAdmin only)
  *     security:
  *       - ClientKey: []

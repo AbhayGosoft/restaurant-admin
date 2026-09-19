@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/categories:
  *   get:
- *     tags: [Categories]
+ *     tags: ["Admin: Categories"]
  *     summary: List restaurant categories
  *     security:
  *       - ClientKey: []
@@ -21,7 +21,7 @@
  * @openapi
  * /api/admin/categories:
  *   post:
- *     tags: [Categories]
+ *     tags: ["Admin: Categories"]
  *     summary: Create a category (SuperAdmin only)
  *     security:
  *       - ClientKey: []
@@ -55,7 +55,7 @@
  * @openapi
  * /api/admin/categories/{id}:
  *   patch:
- *     tags: [Categories]
+ *     tags: ["Admin: Categories"]
  *     summary: Update a category (SuperAdmin only)
  *     security:
  *       - ClientKey: []
@@ -94,7 +94,7 @@
  * @openapi
  * /api/admin/categories/{id}:
  *   delete:
- *     tags: [Categories]
+ *     tags: ["Admin: Categories"]
  *     summary: Deactivate a category (SuperAdmin only)
  *     security:
  *       - ClientKey: []

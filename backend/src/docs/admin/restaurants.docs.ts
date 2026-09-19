@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/restaurants:
  *   get:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Restaurants"]
  *     summary: List restaurants (scoped to the admin's assigned restaurants; SuperAdmin sees all)
  *     security:
  *       - ClientKey: []
@@ -46,7 +46,7 @@
  * @openapi
  * /api/admin/restaurants:
  *   post:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Restaurants"]
  *     summary: Create a restaurant
  *     description: An Admin (non-SuperAdmin) creator is automatically linked as a manager of the new restaurant.
  *     security:
@@ -98,7 +98,7 @@
  * @openapi
  * /api/admin/restaurants/{id}:
  *   get:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Restaurants"]
  *     summary: Get restaurant detail (must be an assigned restaurant, unless SuperAdmin)
  *     security:
  *       - ClientKey: []
@@ -126,7 +126,7 @@
  * @openapi
  * /api/admin/restaurants/{id}:
  *   patch:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Restaurants"]
  *     summary: Update a restaurant (must be an assigned restaurant, unless SuperAdmin)
  *     security:
  *       - ClientKey: []
@@ -162,7 +162,7 @@
  * @openapi
  * /api/admin/restaurants/{id}/rating:
  *   patch:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Restaurants"]
  *     summary: Set a restaurant's public rating (SuperAdmin only)
  *     security:
  *       - ClientKey: []
@@ -200,7 +200,7 @@
  * @openapi
  * /api/admin/restaurants/{id}:
  *   delete:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Restaurants"]
  *     summary: Deactivate a restaurant (must be an assigned restaurant, unless SuperAdmin)
  *     security:
  *       - ClientKey: []

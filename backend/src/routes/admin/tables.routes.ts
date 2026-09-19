@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireAdminAuth, requireRestaurantAccess } from "../../middleware/auth.js";
-import { ApiError, asyncHandler, idParam, sendSuccess, validateBody } from "../../utils/http.js";
+import { getTableAvailability } from "../../services/slotService.js";
+import { TABLE_PREFERENCE_LABELS } from "../../constants/bookingOptions.js";
+import { ApiError, asyncHandler, idParam, sendSuccess, validateBody, validateQuery } from "../../utils/http.js";
 
 const router = Router({ mergeParams: true });
 router.use(requireAdminAuth, requireRestaurantAccess("restaurantId"));
@@ -20,6 +22,21 @@ router.get("/", asyncHandler(async (req, res) => {
   const restaurantId = idParam(req, "restaurantId");
   const tables = await prisma.diningTable.findMany({ where: { restaurantId }, orderBy: [{ capacity: "asc" }, { name: "asc" }] });
   sendSuccess(res, tables.map(toTable));
+}));
+
+const availabilityQuerySchema = z.object({
+  date: z.string().min(1, "date is required"),
+  time: z.string().min(1, "time is required"),
+  people: z.coerce.number().int().min(1).default(1),
+  tablePreference: z.enum(Object.values(TABLE_PREFERENCE_LABELS) as [string, ...string[]]).optional(),
+});
+
+// OpenAPI docs: src/docs/admin/tables.docs.ts
+router.get("/availability", asyncHandler(async (req, res) => {
+  const restaurantId = idParam(req, "restaurantId");
+  const query = validateQuery(availabilityQuerySchema, req.query);
+  const availability = await getTableAvailability(restaurantId, query.date, query.time, query.people, query.tablePreference);
+  sendSuccess(res, availability);
 }));
 
 router.post("/", asyncHandler(async (req, res) => {

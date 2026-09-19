@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { logoutCustomer, refreshCustomerSession } from "../services/customerAuthService.js";
-import { asyncHandler, sendSuccess, validateBody } from "../utils/http.js";
+import { logoutCustomer, refreshCustomerSession } from "../../services/customerAuthService.js";
+import { asyncHandler, sendSuccess, validateBody } from "../../utils/http.js";
 
 const router = Router();
 
@@ -12,7 +12,7 @@ const router = Router();
 
 const refreshSchema = z.object({ refresh_token: z.string().min(1, "refresh_token is required") });
 
-// OpenAPI docs: src/docs/customerAuth.docs.ts
+// OpenAPI docs: src/docs/user/auth.docs.ts
 router.post(
   "/refresh",
   asyncHandler(async (req, res) => {

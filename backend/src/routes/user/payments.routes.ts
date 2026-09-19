@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireCustomerAuth } from "../middleware/auth.js";
-import { initiatePayment, verifyPayment } from "../services/paymentService.js";
-import { asyncHandler, sendSuccess, validateBody } from "../utils/http.js";
+import { requireCustomerAuth } from "../../middleware/auth.js";
+import { initiatePayment, verifyPayment } from "../../services/paymentService.js";
+import { asyncHandler, sendSuccess, validateBody } from "../../utils/http.js";
 
 const router = Router();
 router.use(requireCustomerAuth);
 
-// OpenAPI docs: src/docs/payments.docs.ts
+// OpenAPI docs: src/docs/user/payments.docs.ts
 router.post(
   "/initiate",
   asyncHandler(async (req, res) => {

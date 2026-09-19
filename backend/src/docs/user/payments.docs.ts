@@ -2,7 +2,7 @@
  * @openapi
  * /api/payments/initiate:
  *   post:
- *     tags: [Payments]
+ *     tags: ["User: Payments"]
  *     summary: Create a Razorpay order for the booking advance
  *     security:
  *       - ClientKey: []
@@ -21,7 +21,7 @@
  * @openapi
  * /api/payments/verify:
  *   post:
- *     tags: [Payments]
+ *     tags: ["User: Payments"]
  *     summary: Verify a Razorpay payment signature
  *     security:
  *       - ClientKey: []

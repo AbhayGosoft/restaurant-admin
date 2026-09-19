@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/bookings:
  *   get:
- *     tags: [Bookings]
+ *     tags: ["Admin: Bookings"]
  *     summary: List bookings (scoped to the admin's assigned restaurants; SuperAdmin sees all)
  *     security:
  *       - ClientKey: []
@@ -47,7 +47,7 @@
  * @openapi
  * /api/admin/bookings/{id}:
  *   get:
- *     tags: [Bookings]
+ *     tags: ["Admin: Bookings"]
  *     summary: Get a booking by id (must be an assigned restaurant, unless SuperAdmin)
  *     security:
  *       - ClientKey: []
@@ -75,7 +75,7 @@
  * @openapi
  * /api/admin/bookings/{id}/cancel:
  *   post:
- *     tags: [Bookings]
+ *     tags: ["Admin: Bookings"]
  *     summary: Cancel a booking (must be an assigned restaurant, unless SuperAdmin)
  *     security:
  *       - ClientKey: []

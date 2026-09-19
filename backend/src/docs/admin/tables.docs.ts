@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/tables:
  *   get:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Tables"]
  *     summary: List a restaurant's physical tables
  *     security:
  *       - ClientKey: []
@@ -28,7 +28,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/tables:
  *   post:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Tables"]
  *     summary: Create a physical table
  *     security:
  *       - ClientKey: []
@@ -67,9 +67,52 @@
 
 /**
  * @openapi
+ * /api/admin/restaurants/{restaurantId}/tables/availability:
+ *   get:
+ *     tags: ["Admin: Tables"]
+ *     summary: Check which physical tables are free for a date/time/party size
+ *     description: Independent of the slot grid — useful for walk-ins or manual booking assignment.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: restaurantId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, example: "2026-09-25" }
+ *       - in: query
+ *         name: time
+ *         required: true
+ *         schema: { type: string, example: "12:00 PM" }
+ *       - in: query
+ *         name: people
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *       - in: query
+ *         name: tablePreference
+ *         schema: { type: string, enum: [Any Table, Window Seat, Indoor Seat, Outdoor Seat] }
+ *     responses:
+ *       200:
+ *         description: Table availability for the requested slot
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       403:
+ *         $ref: "#/components/responses/Forbidden"
+ *       422:
+ *         $ref: "#/components/responses/ValidationError"
+ */
+
+/**
+ * @openapi
  * /api/admin/restaurants/{restaurantId}/tables/{tableId}:
  *   patch:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Tables"]
  *     summary: Update a physical table
  *     security:
  *       - ClientKey: []
@@ -116,7 +159,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/tables/{tableId}:
  *   delete:
- *     tags: [Restaurants]
+ *     tags: ["Admin: Tables"]
  *     summary: Deactivate a physical table
  *     description: Marks the table INACTIVE; it is not permanently deleted.
  *     security:

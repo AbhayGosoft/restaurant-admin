@@ -2,7 +2,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/menu/categories:
  *   get:
- *     tags: [Menu]
+ *     tags: ["Admin: Menu"]
  *     summary: List a restaurant's menu categories (with items)
  *     security:
  *       - ClientKey: []
@@ -28,7 +28,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/menu/categories:
  *   post:
- *     tags: [Menu]
+ *     tags: ["Admin: Menu"]
  *     summary: Create a menu category
  *     security:
  *       - ClientKey: []
@@ -67,7 +67,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/menu/categories/{categoryId}:
  *   patch:
- *     tags: [Menu]
+ *     tags: ["Admin: Menu"]
  *     summary: Update a menu category
  *     security:
  *       - ClientKey: []
@@ -110,7 +110,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/menu/categories/{categoryId}:
  *   delete:
- *     tags: [Menu]
+ *     tags: ["Admin: Menu"]
  *     summary: Deactivate a menu category
  *     security:
  *       - ClientKey: []
@@ -142,7 +142,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/menu/categories/{categoryId}/items:
  *   post:
- *     tags: [Menu]
+ *     tags: ["Admin: Menu"]
  *     summary: Create a menu item in a category
  *     security:
  *       - ClientKey: []
@@ -191,7 +191,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/menu/items/{itemId}:
  *   patch:
- *     tags: [Menu]
+ *     tags: ["Admin: Menu"]
  *     summary: Update a menu item
  *     security:
  *       - ClientKey: []
@@ -238,7 +238,7 @@
  * @openapi
  * /api/admin/restaurants/{restaurantId}/menu/items/{itemId}:
  *   delete:
- *     tags: [Menu]
+ *     tags: ["Admin: Menu"]
  *     summary: Deactivate a menu item
  *     security:
  *       - ClientKey: []

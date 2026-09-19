@@ -2,7 +2,7 @@
  * @openapi
  * /api/restaurants:
  *   get:
- *     tags: [Restaurants]
+ *     tags: ["User: Restaurants"]
  *     summary: List/search restaurants
  *     security:
  *       - ClientKey: []
@@ -52,7 +52,7 @@
  * @openapi
  * /api/restaurants/{id}:
  *   get:
- *     tags: [Restaurants]
+ *     tags: ["User: Restaurants"]
  *     summary: Get restaurant detail
  *     security:
  *       - ClientKey: []
@@ -83,7 +83,7 @@
  * @openapi
  * /api/restaurants/{id}/menu:
  *   get:
- *     tags: [Menu]
+ *     tags: ["User: Menu"]
  *     summary: Get a restaurant's menu
  *     security:
  *       - ClientKey: []
@@ -106,7 +106,7 @@
  * @openapi
  * /api/restaurants/{id}/slots:
  *   get:
- *     tags: [Slots]
+ *     tags: ["User: Slots"]
  *     summary: Get available booking slots for a date/party size
  *     security:
  *       - ClientKey: []
@@ -136,9 +136,49 @@
 
 /**
  * @openapi
+ * /api/restaurants/{id}/tables/availability:
+ *   get:
+ *     tags: ["User: Tables"]
+ *     summary: Check which physical tables are free for a date/time/party size
+ *     description: Lets the app show real tables (not just slot capacity) before the customer books.
+ *     security:
+ *       - ClientKey: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, example: "2026-09-25" }
+ *       - in: query
+ *         name: time
+ *         required: true
+ *         schema: { type: string, example: "12:00 PM" }
+ *       - in: query
+ *         name: people
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *       - in: query
+ *         name: tablePreference
+ *         schema: { type: string, enum: [Any Table, Window Seat, Indoor Seat, Outdoor Seat] }
+ *     responses:
+ *       200:
+ *         description: Table availability for the requested slot
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ *       422:
+ *         $ref: "#/components/responses/ValidationError"
+ */
+
+/**
+ * @openapi
  * /api/restaurants/{id}/bookings:
  *   post:
- *     tags: [Bookings]
+ *     tags: ["User: Bookings"]
  *     summary: Create a booking (after payment order creation)
  *     security:
  *       - ClientKey: []

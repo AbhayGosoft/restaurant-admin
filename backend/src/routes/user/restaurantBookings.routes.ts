@@ -1,14 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireCustomerAuth } from "../middleware/auth.js";
-import { cancelBooking, getBookingForCustomer, getPreorderForCustomer, modifyBooking, removePreorderItemForCustomer, replacePreorderForCustomer } from "../services/bookingService.js";
-import { CANCELLATION_REASON_LABELS } from "../constants/bookingOptions.js";
-import { asyncHandler, idParam, sendSuccess, validateBody } from "../utils/http.js";
+import { requireCustomerAuth } from "../../middleware/auth.js";
+import { cancelBooking, getBookingForCustomer, getPreorderForCustomer, modifyBooking, removePreorderItemForCustomer, replacePreorderForCustomer } from "../../services/bookingService.js";
+import { CANCELLATION_REASON_LABELS } from "../../constants/bookingOptions.js";
+import { asyncHandler, idParam, sendSuccess, validateBody } from "../../utils/http.js";
 
 const router = Router();
 router.use(requireCustomerAuth);
 
-// OpenAPI docs: src/docs/restaurantBookings.docs.ts
+// OpenAPI docs: src/docs/user/restaurantBookings.docs.ts
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
