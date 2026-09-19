@@ -89,9 +89,11 @@ export const getAvailableSlots = async (restaurantId: string, dateStr: string, p
     // Restaurants without configured physical tables keep the original capacity workflow.
     const available = tables.length ? freeTables.length > 0 : seatsLeft >= people;
 
+    const rawSeatsLeft = tables.length ? freeTables.reduce((sum, table) => sum + table.capacity, 0) : seatsLeft;
+
     const group = groupsByMeal.get(slot.meal) ?? { label: mealLabel(slot.meal), slots: [] };
     group.slots.push({
-      time: to12Hour(slot.time), available, seatsLeft: tables.length ? freeTables.reduce((sum, table) => sum + table.capacity, 0) : seatsLeft,
+      time: to12Hour(slot.time), available, seatsLeft: available ? rawSeatsLeft : undefined,
       availableTableCount: freeTables.length,
       ...(tables.length ? { availableTables: freeTables.map((table) => ({ id: table.id, name: table.name, capacity: table.capacity, preference: table.preference, section: table.section })) } : {}),
     });
