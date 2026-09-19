@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { clsx } from "clsx";
-import { Building2, Clock, Settings, Tags, UtensilsCrossed } from "lucide-react";
+import { Armchair, Building2, Clock, Settings, Tags, UtensilsCrossed } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 
 const baseTabs = [
   { to: "general", label: "General", icon: Building2 },
   { to: "menu", label: "Menu", icon: UtensilsCrossed },
   { to: "slots", label: "Slots", icon: Clock },
+  { to: "tables", label: "Tables", icon: Armchair },
 ];
 
 const superAdminTabs = [{ to: "categories", label: "Categories", icon: Tags }];

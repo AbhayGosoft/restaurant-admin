@@ -68,7 +68,7 @@ export function BookingsPage() {
         <div className="table-scroll">
           <table className="data-table">
             <thead>
-              <tr><th>Booking</th><th>Guest</th><th>Date &amp; time</th><th>People</th><th>Status</th><th>Advance</th></tr>
+              <tr><th>Booking</th><th>Guest</th><th>Date &amp; time</th><th>Table</th><th>People</th><th>Status</th><th>Advance</th></tr>
             </thead>
             <tbody>
               {bookings.map((booking) => (
@@ -76,6 +76,7 @@ export function BookingsPage() {
                   <td>{booking.humanBookingId}</td>
                   <td>{booking.fullName}<br /><small className="muted">{booking.mobileNumber}</small></td>
                   <td>{booking.date} · {booking.time}</td>
+                  <td>{booking.table?.name ?? "Auto/capacity"}</td>
                   <td>{booking.people}</td>
                   <td><span className={clsx("badge", `badge--${booking.status}`)}>{booking.status}</span></td>
                   <td>₹{booking.advancePaid}</td>
@@ -101,6 +102,8 @@ export function BookingsPage() {
             <div className="booking-detail-row"><Phone size={16} /> {selected.mobileNumber}</div>
             <div className="booking-detail-row"><CalendarDays size={16} /> {selected.date} at {selected.time}</div>
             <div className="booking-detail-row">Table preference: <strong>{selected.tablePreference}</strong></div>
+            {selected.table && <div className="booking-detail-row">Assigned table: <strong>{selected.table.name}</strong>{selected.table.section ? ` · ${selected.table.section}` : ""}</div>}
+            {selected.preorder && <div className="booking-detail-row">Pre-order: <strong>₹{selected.preorder.total}</strong><br />{selected.preorder.items.map((item) => <span key={item.id}>{item.quantity}× {item.name}<br /></span>)}</div>}
             {selected.specialRequest && <div className="booking-detail-row">Special request: {selected.specialRequest}</div>}
             <div className="booking-detail-row">Advance paid: <strong>₹{selected.advancePaid}</strong></div>
             <div className="booking-detail-row">Status: <span className={clsx("badge", `badge--${selected.status}`)}>{selected.status}</span></div>

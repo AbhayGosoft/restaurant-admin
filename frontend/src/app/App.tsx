@@ -10,6 +10,7 @@ import { SettingsLayout } from "@/features/settings/SettingsLayout";
 import { GeneralSettingsPage } from "@/features/settings/GeneralSettingsPage";
 import { MenuSettingsPage } from "@/features/settings/MenuSettingsPage";
 import { SlotsSettingsPage } from "@/features/settings/SlotsSettingsPage";
+import { TablesSettingsPage } from "@/features/settings/TablesSettingsPage";
 import { CategoriesSettingsPage } from "@/features/settings/CategoriesSettingsPage";
 import { ProfilePage } from "@/features/profile/ProfilePage";
 
@@ -54,6 +55,7 @@ export function App() {
           <Route path="general" element={<GeneralSettingsPage />} />
           <Route path="menu" element={<MenuSettingsPage />} />
           <Route path="slots" element={<SlotsSettingsPage />} />
+          <Route path="tables" element={<TablesSettingsPage />} />
           <Route path="categories" element={role === "SUPERADMIN" ? <CategoriesSettingsPage /> : <Navigate to="general" replace />} />
         </Route>
       </Route>

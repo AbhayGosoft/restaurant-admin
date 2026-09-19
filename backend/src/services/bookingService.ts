@@ -1,7 +1,7 @@
 import type { RestaurantBooking } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { getActiveRestaurantOrThrow } from "./restaurantService.js";
-import { getBookedSeatCount } from "./slotService.js";
+import { findAvailableTable, getBookedSeatCount } from "./slotService.js";
 import { cancelReminder, scheduleReminder } from "../queues/reminderQueue.js";
 import { notifyCustomer } from "./notificationService.js";
 import { emitToRestaurant } from "../socket/server.js";
@@ -22,7 +22,7 @@ const deriveClientStatus = (booking: Pick<RestaurantBooking, "status" | "date" |
   return combineDateAndTime(booking.date, booking.time).getTime() < Date.now() ? "past" : "upcoming";
 };
 
-export const toBookingResponse = (booking: RestaurantBooking) => ({
+export const toBookingResponse = (booking: RestaurantBooking & { table?: any; preorder?: any }) => ({
   id: booking.id,
   humanBookingId: booking.humanBookingId,
   restaurantId: booking.restaurantId,
@@ -42,6 +42,8 @@ export const toBookingResponse = (booking: RestaurantBooking) => ({
   status: deriveClientStatus(booking),
   cancellationReason: booking.cancellationReason ? CANCELLATION_REASON_LABELS[booking.cancellationReason] : null,
   advancePaid: Number(booking.advancePaid),
+  table: booking.table ? { id: booking.table.id, name: booking.table.name, capacity: booking.table.capacity, preference: booking.table.preference, section: booking.table.section } : null,
+  preorder: booking.preorder ? { id: booking.preorder.id, subtotal: Number(booking.preorder.subtotal), total: Number(booking.preorder.total), items: booking.preorder.items?.map((item: any) => ({ id: item.id, menuItemId: item.menuItemId, name: item.itemName, unitPrice: Number(item.unitPrice), quantity: item.quantity, note: item.note, lineTotal: Number(item.lineTotal) })) ?? [] } : null,
   refund:
     booking.status === "CANCELLED"
       ? { eligible: booking.refundEligible ?? false, amount: booking.refundAmount ? Number(booking.refundAmount) : 0 }
@@ -61,6 +63,23 @@ export type CreateBookingInput = {
   razorpayPaymentId: string;
   latitude?: number;
   longitude?: number;
+  tableId?: string;
+  preorderItems?: Array<{ menuItemId: string; quantity: number; note?: string }>;
+};
+
+const bookingInclude = { table: true, preorder: { include: { items: true } } } as const;
+
+const preparePreorder = async (client: any, restaurantId: string, items: CreateBookingInput["preorderItems"] = []) => {
+  if (!items?.length) return null;
+  const uniqueIds = [...new Set(items.map((item) => item.menuItemId))];
+  const menuItems: any[] = await client.menuItem.findMany({ where: { id: { in: uniqueIds }, isActive: true, menuCategory: { restaurantId, isActive: true } } });
+  if (menuItems.length !== uniqueIds.length) throw new ApiError(422, "One or more pre-order menu items are unavailable.");
+  const byId = new Map(menuItems.map((item: any) => [item.id, item]));
+  return items.map((item) => {
+    const menuItem = byId.get(item.menuItemId)!;
+    const unitPrice = Number(menuItem.price);
+    return { menuItemId: menuItem.id, itemName: menuItem.name, unitPrice, quantity: item.quantity, note: item.note, lineTotal: unitPrice * item.quantity };
+  });
 };
 
 const assertValidDate = (value: string) => {
@@ -111,11 +130,13 @@ export const createBooking = async (customerId: string, restaurantId: string, in
     // Row lock on the restaurant serializes concurrent booking attempts for the same
     // restaurant/date/time so the capacity re-check below can't race.
     await tx.$queryRaw`SELECT id FROM restaurants WHERE id = ${restaurantId} FOR UPDATE`;
-    const booked = await getBookedSeatCount(tx, { restaurantId, date, time: time24 });
-    if (restaurant.seatingCapacity - booked < input.people) {
-      throw new ApiError(409, "Selected slot no longer has enough capacity.");
+    const selection = await findAvailableTable(tx, { restaurantId, date, time: time24, people: input.people, preference: tablePreference, tableId: input.tableId });
+    if (selection.hasTables && !selection.table) throw new ApiError(409, "No suitable table is available for this slot.");
+    if (!selection.hasTables) {
+      const booked = await getBookedSeatCount(tx, { restaurantId, date, time: time24 });
+      if (restaurant.seatingCapacity - booked < input.people) throw new ApiError(409, "Selected slot no longer has enough capacity.");
     }
-
+    const preorderItems = await preparePreorder(tx, restaurantId, input.preorderItems);
     return tx.restaurantBooking.create({
       data: {
         humanBookingId: generateHumanBookingId(restaurant.name),
@@ -136,7 +157,10 @@ export const createBooking = async (customerId: string, restaurantId: string, in
         email: input.email,
         advancePaid: payment.amount,
         paymentId: payment.id,
+        tableId: selection.table?.id,
+        ...(preorderItems ? { preorder: { create: { subtotal: preorderItems.reduce((sum, item) => sum + item.lineTotal, 0), total: preorderItems.reduce((sum, item) => sum + item.lineTotal, 0), items: { create: preorderItems } } } } : {}),
       },
+      include: bookingInclude,
     });
   });
 
@@ -162,6 +186,7 @@ export const listMyBookings = async (customerId: string, filter?: "upcoming" | "
   const bookings = await prisma.restaurantBooking.findMany({
     where: { restaurantUserId: customerId },
     orderBy: [{ date: "desc" }, { time: "desc" }],
+    include: bookingInclude,
   });
   const mapped = bookings.map(toBookingResponse);
   if (!filter) return mapped;
@@ -169,7 +194,7 @@ export const listMyBookings = async (customerId: string, filter?: "upcoming" | "
 };
 
 export const getBookingForCustomer = async (customerId: string, id: string) => {
-  const booking = await prisma.restaurantBooking.findUnique({ where: { id } });
+  const booking = await prisma.restaurantBooking.findUnique({ where: { id }, include: bookingInclude });
   if (!booking) throw new ApiError(404, "Booking not found");
   if (booking.restaurantUserId !== customerId) throw new ApiError(403, "You do not have access to this booking");
   return toBookingResponse(booking);
@@ -217,7 +242,9 @@ export const modifyBooking = async (customerId: string, id: string, input: Modif
     if (restaurant.seatingCapacity - booked < nextPeople) {
       throw new ApiError(409, "Selected slot no longer has enough capacity.");
     }
-    return tx.restaurantBooking.update({ where: { id }, data: { date: nextDate, time: nextTime24, people: nextPeople } });
+    const selection = await findAvailableTable(tx, { restaurantId: existing.restaurantId, date: nextDate, time: nextTime24, people: nextPeople, preference: existing.tablePreference, tableId: existing.tableId ?? undefined, excludeBookingId: existing.id });
+    if (selection.hasTables && !selection.table) throw new ApiError(409, "No suitable table is available for this slot.");
+    return tx.restaurantBooking.update({ where: { id }, data: { date: nextDate, time: nextTime24, people: nextPeople, tableId: selection.table?.id }, include: bookingInclude });
   });
 
   await cancelReminder(existing.reminderJobId);
@@ -279,6 +306,7 @@ export const listBookingsForAdmin = async (input: { restaurantId?: string; resta
   const bookings = await prisma.restaurantBooking.findMany({
     where: input.restaurantId ? { restaurantId: input.restaurantId } : input.restaurantIds ? { restaurantId: { in: input.restaurantIds } } : {},
     orderBy: [{ date: "desc" }, { time: "desc" }],
+    include: bookingInclude,
   });
   let mapped = bookings.map(toBookingResponse);
   if (input.status) mapped = mapped.filter((booking) => booking.status === input.status);
@@ -289,9 +317,48 @@ export const listBookingsForAdmin = async (input: { restaurantId?: string; resta
 };
 
 export const getBookingForAdmin = async (id: string) => {
-  const booking = await prisma.restaurantBooking.findUnique({ where: { id } });
+  const booking = await prisma.restaurantBooking.findUnique({ where: { id }, include: bookingInclude });
   if (!booking) throw new ApiError(404, "Booking not found");
   return { booking: toBookingResponse(booking), restaurantId: booking.restaurantId };
+};
+
+const assertPreorderEditable = async (customerId: string, bookingId: string) => {
+  const booking = await prisma.restaurantBooking.findUnique({ where: { id: bookingId }, include: bookingInclude });
+  if (!booking) throw new ApiError(404, "Booking not found");
+  if (booking.restaurantUserId !== customerId) throw new ApiError(403, "You do not have access to this booking");
+  if (booking.status === "CANCELLED") throw new ApiError(409, "Cancelled bookings cannot be changed");
+  const minutesUntilSlot = (combineDateAndTime(booking.date, booking.time).getTime() - Date.now()) / 60_000;
+  if (minutesUntilSlot < policy.modificationCutoffMinutes) throw new ApiError(409, `Bookings can only be modified up to ${policy.modificationCutoffMinutes} minutes before the slot time.`);
+  return booking;
+};
+
+export const getPreorderForCustomer = async (customerId: string, bookingId: string) => {
+  const booking = await getBookingForCustomer(customerId, bookingId);
+  return booking.preorder ?? { items: [], subtotal: 0, total: 0 };
+};
+
+export const replacePreorderForCustomer = async (customerId: string, bookingId: string, items: NonNullable<CreateBookingInput["preorderItems"]>) => {
+  const booking = await assertPreorderEditable(customerId, bookingId);
+  const rows = await preparePreorder(prisma, booking.restaurantId, items);
+  const subtotal = rows?.reduce((sum, item) => sum + item.lineTotal, 0) ?? 0;
+  await prisma.$transaction(async (tx) => {
+    await tx.bookingPreorder.deleteMany({ where: { bookingId } });
+    if (rows?.length) await tx.bookingPreorder.create({ data: { bookingId, subtotal, total: subtotal, items: { create: rows } } });
+  });
+  return getPreorderForCustomer(customerId, bookingId);
+};
+
+export const removePreorderItemForCustomer = async (customerId: string, bookingId: string, itemId: string) => {
+  await assertPreorderEditable(customerId, bookingId);
+  const item = await prisma.bookingPreorderItem.findFirst({ where: { id: itemId, preorder: { bookingId } } });
+  if (!item) throw new ApiError(404, "Pre-order item not found");
+  await prisma.$transaction(async (tx) => {
+    await tx.bookingPreorderItem.delete({ where: { id: itemId } });
+    const remaining = await tx.bookingPreorderItem.aggregate({ where: { preorderId: item.preorderId }, _sum: { lineTotal: true } });
+    const total = Number(remaining._sum.lineTotal ?? 0);
+    await tx.bookingPreorder.update({ where: { id: item.preorderId }, data: { subtotal: total, total } });
+  });
+  return getPreorderForCustomer(customerId, bookingId);
 };
 
 /** Admin-initiated cancellation — same rules as the customer path minus the ownership check. */

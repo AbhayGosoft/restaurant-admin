@@ -89,6 +89,16 @@ export interface SlotConfiguration {
   isActive: boolean;
 }
 
+export type DiningTableStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
+export interface DiningTable {
+  id: string;
+  name: string;
+  capacity: number;
+  preference: "ANY" | "WINDOW" | "INDOOR" | "OUTDOOR";
+  section?: string | null;
+  status: DiningTableStatus;
+}
+
 export type BookingClientStatus = "upcoming" | "past" | "cancelled";
 export type TablePreference = "Any Table" | "Window Seat" | "Indoor Seat" | "Outdoor Seat";
 
@@ -112,6 +122,8 @@ export interface RestaurantBooking {
   status: BookingClientStatus;
   cancellationReason?: string | null;
   advancePaid: number;
+  table?: Pick<DiningTable, "id" | "name" | "capacity" | "preference" | "section"> | null;
+  preorder?: { id: string; subtotal: number; total: number; items: { id: string; menuItemId: string; name: string; unitPrice: number; quantity: number; note?: string | null; lineTotal: number }[] } | null;
   refund?: { eligible: boolean; amount: number };
 }
 

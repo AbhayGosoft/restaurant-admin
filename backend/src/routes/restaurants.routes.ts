@@ -57,6 +57,7 @@ router.get(
 const slotsQuerySchema = z.object({
   date: z.string().min(1, "date is required"),
   people: z.coerce.number().int().min(1).default(1),
+  tablePreference: z.enum(Object.values(TABLE_PREFERENCE_LABELS) as [string, ...string[]]).optional(),
 });
 
 router.get(
@@ -64,7 +65,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const id = idParam(req);
     const query = validateQuery(slotsQuerySchema, req.query);
-    const slots = await getAvailableSlots(id, query.date, query.people);
+    const slots = await getAvailableSlots(id, query.date, query.people, query.tablePreference);
     sendSuccess(res, slots);
   }),
 );
@@ -84,6 +85,8 @@ const bookingSchema = z.object({
     razorpay_order_id: z.string().min(1),
     razorpay_payment_id: z.string().min(1),
   }),
+  tableId: z.string().uuid().optional(),
+  preorderItems: z.array(z.object({ menuItemId: z.string().uuid(), quantity: z.coerce.number().int().min(1).max(50), note: z.string().trim().max(500).optional() })).max(50).optional(),
 });
 
 router.post(
@@ -105,6 +108,8 @@ router.post(
       longitude: body.longitude,
       razorpayOrderId: body.payment.razorpay_order_id,
       razorpayPaymentId: body.payment.razorpay_payment_id,
+      tableId: body.tableId,
+      preorderItems: body.preorderItems,
     });
     sendSuccess(res, booking, "Booking confirmed", 201);
   }),

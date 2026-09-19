@@ -17,6 +17,12 @@ enum RecordStatus {
   INACTIVE
 }
 
+enum DiningTableStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
 enum TablePreference {
   ANY
   WINDOW
@@ -175,6 +181,7 @@ model Restaurant {
   categories     RestaurantCategoryLink[]
   menuCategories MenuCategory[]
   slots          SlotConfiguration[]
+  tables         DiningTable[]
   bookings       RestaurantBooking[]
   admins         AdminRestaurant[]
 
@@ -234,6 +241,25 @@ model SlotConfiguration {
   @@map("slot_configurations")
 }
 
+model DiningTable {
+  id           String            @id @default(uuid())
+  restaurantId String            @map("restaurant_id")
+  name         String
+  capacity     Int
+  preference   TablePreference   @default(ANY)
+  section      String?
+  status       DiningTableStatus @default(ACTIVE)
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  bookings   RestaurantBooking[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId, status])
+  @@map("dining_tables")
+}
+
 model RestaurantBooking {
   id                      String              @id @default(uuid())
   humanBookingId          String              @unique @map("human_booking_id")
@@ -257,6 +283,7 @@ model RestaurantBooking {
   cancelledAt             DateTime?           @map("cancelled_at")
   advancePaid             Decimal             @map("advance_paid") @db.Decimal(10, 2)
   paymentId               String              @unique @map("payment_id")
+  tableId                 String?             @map("table_id")
   refundEligible          Boolean?            @map("refund_eligible")
   refundAmount            Decimal?            @map("refund_amount") @db.Decimal(10, 2)
   reminderJobId           String?             @map("reminder_job_id")
@@ -266,12 +293,47 @@ model RestaurantBooking {
   restaurant     Restaurant     @relation(fields: [restaurantId], references: [id])
   restaurantUser RestaurantUser @relation(fields: [restaurantUserId], references: [id])
   payment        Payment        @relation(fields: [paymentId], references: [id])
+  table          DiningTable?   @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  preorder       BookingPreorder?
   notifications  Notification[]
 
   @@index([restaurantId, date, time])
+  @@index([tableId, date, time])
   @@index([restaurantUserId, status])
   @@index([status, date])
   @@map("restaurant_bookings")
+}
+
+model BookingPreorder {
+  id          String   @id @default(uuid())
+  bookingId   String   @unique @map("booking_id")
+  subtotal    Decimal  @default(0) @db.Decimal(10, 2)
+  total       Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  booking RestaurantBooking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  items   BookingPreorderItem[]
+
+  @@map("booking_preorders")
+}
+
+model BookingPreorderItem {
+  id         String   @id @default(uuid())
+  preorderId String   @map("preorder_id")
+  menuItemId String   @map("menu_item_id")
+  itemName   String   @map("item_name")
+  unitPrice  Decimal  @map("unit_price") @db.Decimal(10, 2)
+  quantity   Int
+  note       String?  @db.Text
+  lineTotal  Decimal  @map("line_total") @db.Decimal(10, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  preorder BookingPreorder @relation(fields: [preorderId], references: [id], onDelete: Cascade)
+
+  @@index([preorderId])
+  @@index([menuItemId])
+  @@map("booking_preorder_items")
 }
 
 model Payment {

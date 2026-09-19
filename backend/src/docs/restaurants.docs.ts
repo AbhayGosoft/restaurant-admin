@@ -166,6 +166,16 @@
  *               email: { type: string, format: email }
  *               latitude: { type: number }
  *               longitude: { type: number }
+ *               tableId: { type: string, format: uuid, description: "Optional physical table; otherwise the smallest suitable table is selected" }
+ *               preorderItems:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [menuItemId, quantity]
+ *                   properties:
+ *                     menuItemId: { type: string, format: uuid }
+ *                     quantity: { type: integer, minimum: 1 }
+ *                     note: { type: string }
  *               payment:
  *                 type: object
  *                 required: [razorpay_order_id, razorpay_payment_id]

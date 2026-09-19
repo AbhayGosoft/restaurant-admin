@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireCustomerAuth } from "../middleware/auth.js";
-import { cancelBooking, getBookingForCustomer, modifyBooking } from "../services/bookingService.js";
+import { cancelBooking, getBookingForCustomer, getPreorderForCustomer, modifyBooking, removePreorderItemForCustomer, replacePreorderForCustomer } from "../services/bookingService.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/bookingOptions.js";
 import { asyncHandler, idParam, sendSuccess, validateBody } from "../utils/http.js";
 
@@ -47,5 +47,17 @@ router.post(
     sendSuccess(res, result, "Booking cancelled");
   }),
 );
+
+const preorderSchema = z.object({ items: z.array(z.object({ menuItemId: z.string().uuid(), quantity: z.coerce.number().int().min(1).max(50), note: z.string().trim().max(500).optional() })).max(50) });
+router.get("/:id/preorder", requireCustomerAuth, asyncHandler(async (req, res) => {
+  sendSuccess(res, await getPreorderForCustomer(req.customer!.id, idParam(req)));
+}));
+router.put("/:id/preorder", requireCustomerAuth, asyncHandler(async (req, res) => {
+  const body = validateBody(preorderSchema, req.body);
+  sendSuccess(res, await replacePreorderForCustomer(req.customer!.id, idParam(req), body.items), "Pre-order updated");
+}));
+router.delete("/:id/preorder/items/:itemId", requireCustomerAuth, asyncHandler(async (req, res) => {
+  sendSuccess(res, await removePreorderItemForCustomer(req.customer!.id, idParam(req), idParam(req, "itemId")), "Pre-order item removed");
+}));
 
 export default router;

@@ -28,6 +28,7 @@ import adminAdminsRoutes from "./routes/admin/admins.routes.js";
 import adminRestaurantsRoutes from "./routes/admin/restaurants.routes.js";
 import adminMenuRoutes from "./routes/admin/menu.routes.js";
 import adminSlotsRoutes from "./routes/admin/slots.routes.js";
+import adminTablesRoutes from "./routes/admin/tables.routes.js";
 import adminBookingsRoutes from "./routes/admin/bookings.routes.js";
 import adminCategoriesRoutes from "./routes/admin/categories.routes.js";
 
@@ -93,6 +94,7 @@ app.use("/api/admin/admins", adminAdminsRoutes);
 app.use("/api/admin/categories", adminCategoriesRoutes);
 app.use("/api/admin/restaurants/:restaurantId/menu", adminMenuRoutes);
 app.use("/api/admin/restaurants/:restaurantId/slots", adminSlotsRoutes);
+app.use("/api/admin/restaurants/:restaurantId/tables", adminTablesRoutes);
 app.use("/api/admin/restaurants", adminRestaurantsRoutes);
 app.use("/api/admin/bookings", adminBookingsRoutes);
 app.use("/api/uploads", uploadsRoutes);
