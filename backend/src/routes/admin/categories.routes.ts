@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireAdminAuth, requireSuperAdmin } from "../../middleware/auth.js";
-import { asyncHandler, idParam, sendSuccess, validateBody } from "../../utils/http.js";
+import { ApiError, asyncHandler, idParam, sendSuccess, validateBody } from "../../utils/http.js";
 import { slugify } from "../../utils/query.js";
 
 const router = Router();
@@ -52,6 +52,18 @@ router.delete(
     const id = idParam(req);
     await prisma.restaurantCategory.update({ where: { id }, data: { isActive: false } });
     sendSuccess(res, {}, "Category deactivated");
+  }),
+);
+
+// Hard delete. Categories carry no booking history — restaurant links cascade away.
+router.delete(
+  "/:id/permanent",
+  asyncHandler(async (req, res) => {
+    const id = idParam(req);
+    const category = await prisma.restaurantCategory.findUnique({ where: { id } });
+    if (!category) throw new ApiError(404, "Category not found");
+    await prisma.restaurantCategory.delete({ where: { id } });
+    sendSuccess(res, { deleted: true, deactivated: false }, "Category deleted permanently");
   }),
 );
 

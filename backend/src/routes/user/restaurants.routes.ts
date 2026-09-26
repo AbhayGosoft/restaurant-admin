@@ -3,7 +3,8 @@ import { z } from "zod";
 import { requireCustomerAuth } from "../../middleware/auth.js";
 import { getRestaurantDetail, listRestaurants } from "../../services/restaurantService.js";
 import { getMenu } from "../../services/menuService.js";
-import { getAvailableSlots, getTableAvailability } from "../../services/slotService.js";
+import { getAvailableSlots } from "../../services/slotService.js";
+// import { getTableAvailability } from "../../services/slotService.js"; // Table booking disabled
 import { createBooking } from "../../services/bookingService.js";
 import { TABLE_PREFERENCE_LABELS } from "../../constants/bookingOptions.js";
 import { asyncHandler, idParam, sendSuccess, validateBody, validateQuery } from "../../utils/http.js";
@@ -70,28 +71,30 @@ router.get(
   }),
 );
 
-const tableAvailabilityQuerySchema = z.object({
-  date: z.string().min(1, "date is required"),
-  time: z.string().min(1, "time is required"),
-  people: z.coerce.number().int().min(1).default(1),
-  tablePreference: z.enum(Object.values(TABLE_PREFERENCE_LABELS) as [string, ...string[]]).optional(),
-});
-
-router.get(
-  "/:id/tables/availability",
-  asyncHandler(async (req, res) => {
-    const id = idParam(req);
-    const query = validateQuery(tableAvailabilityQuerySchema, req.query);
-    const availability = await getTableAvailability(id, query.date, query.time, query.people, query.tablePreference);
-    sendSuccess(res, availability);
-  }),
-);
+// Table booking disabled — customer table availability endpoint turned off for now.
+// const tableAvailabilityQuerySchema = z.object({
+//   date: z.string().min(1, "date is required"),
+//   time: z.string().min(1, "time is required"),
+//   people: z.coerce.number().int().min(1).default(1),
+//   tablePreference: z.enum(Object.values(TABLE_PREFERENCE_LABELS) as [string, ...string[]]).optional(),
+// });
+//
+// router.get(
+//   "/:id/tables/availability",
+//   asyncHandler(async (req, res) => {
+//     const id = idParam(req);
+//     const query = validateQuery(tableAvailabilityQuerySchema, req.query);
+//     const availability = await getTableAvailability(id, query.date, query.time, query.people, query.tablePreference);
+//     sendSuccess(res, availability);
+//   }),
+// );
 
 const bookingSchema = z.object({
   date: z.string().min(1),
   time: z.string().min(1),
   people: z.coerce.number().int().min(1),
-  tablePreference: z.enum(Object.values(TABLE_PREFERENCE_LABELS) as [string, ...string[]]),
+  // Table booking disabled — kept optional so older app builds that still send it keep working.
+  tablePreference: z.enum(Object.values(TABLE_PREFERENCE_LABELS) as [string, ...string[]]).optional(),
   specialRequest: z.string().trim().max(500).optional(),
   fullName: z.string().trim().min(1),
   mobileNumber: z.string().trim().min(6),
@@ -102,8 +105,8 @@ const bookingSchema = z.object({
     razorpay_order_id: z.string().min(1),
     razorpay_payment_id: z.string().min(1),
   }),
-  tableId: z.string().uuid().optional(),
-  preorderItems: z.array(z.object({ menuItemId: z.string().uuid(), quantity: z.coerce.number().int().min(1).max(50), note: z.string().trim().max(500).optional() })).max(50).optional(),
+  // tableId: z.string().uuid().optional(), // Table booking disabled
+  preorderItems: z.array(z.object({ menuItemId: z.string().uuid(), quantity: z.coerce.number().int().min(1).max(50), note: z.string().trim().max(500).optional() })).min(1, "Select at least one menu item").max(50),
 });
 
 router.post(
@@ -125,7 +128,7 @@ router.post(
       longitude: body.longitude,
       razorpayOrderId: body.payment.razorpay_order_id,
       razorpayPaymentId: body.payment.razorpay_payment_id,
-      tableId: body.tableId,
+      // tableId: body.tableId, // Table booking disabled
       preorderItems: body.preorderItems,
     });
     sendSuccess(res, booking, "Booking confirmed", 201);

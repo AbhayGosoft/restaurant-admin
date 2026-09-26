@@ -91,6 +91,29 @@ router.delete(
   }),
 );
 
+// Hard delete. If any of the category's items were ever ordered with a booking, the category is
+// deactivated instead so booking history keeps pointing at real menu rows.
+router.delete(
+  "/categories/:categoryId/permanent",
+  asyncHandler(async (req, res) => {
+    const restaurantId = idParam(req, "restaurantId");
+    const categoryId = idParam(req, "categoryId");
+    await assertCategoryInRestaurant(restaurantId, categoryId);
+    const items = await prisma.menuItem.findMany({ where: { menuCategoryId: categoryId }, select: { id: true } });
+    const ordered = items.length ? await prisma.bookingPreorderItem.count({ where: { menuItemId: { in: items.map((item) => item.id) } } }) : 0;
+    if (ordered > 0) {
+      await prisma.$transaction([
+        prisma.menuCategory.update({ where: { id: categoryId }, data: { isActive: false } }),
+        prisma.menuItem.updateMany({ where: { menuCategoryId: categoryId }, data: { isActive: false } }),
+      ]);
+      sendSuccess(res, { deleted: false, deactivated: true }, "Items in this category have booking history, so it was deactivated instead");
+      return;
+    }
+    await prisma.menuCategory.delete({ where: { id: categoryId } });
+    sendSuccess(res, { deleted: true, deactivated: false }, "Menu category deleted permanently");
+  }),
+);
+
 const itemSchema = z.object({
   name: z.string().trim().min(1),
   description: z.string().trim().optional(),
@@ -139,6 +162,24 @@ router.delete(
     await assertItemInRestaurant(restaurantId, itemId);
     await prisma.menuItem.update({ where: { id: itemId }, data: { isActive: false } });
     sendSuccess(res, {}, "Menu item deactivated");
+  }),
+);
+
+// Hard delete. Items that were ordered with a booking are deactivated instead of removed.
+router.delete(
+  "/items/:itemId/permanent",
+  asyncHandler(async (req, res) => {
+    const restaurantId = idParam(req, "restaurantId");
+    const itemId = idParam(req, "itemId");
+    await assertItemInRestaurant(restaurantId, itemId);
+    const ordered = await prisma.bookingPreorderItem.count({ where: { menuItemId: itemId } });
+    if (ordered > 0) {
+      await prisma.menuItem.update({ where: { id: itemId }, data: { isActive: false } });
+      sendSuccess(res, { deleted: false, deactivated: true }, "This item has booking history, so it was deactivated instead");
+      return;
+    }
+    await prisma.menuItem.delete({ where: { id: itemId } });
+    sendSuccess(res, { deleted: true, deactivated: false }, "Menu item deleted permanently");
   }),
 );
 

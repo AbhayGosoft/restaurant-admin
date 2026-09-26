@@ -265,4 +265,66 @@
  *       404:
  *         $ref: "#/components/responses/NotFound"
  */
+/**
+ * @openapi
+ * /api/admin/restaurants/{restaurantId}/menu/categories/{categoryId}/permanent:
+ *   delete:
+ *     tags: ["Admin: Menu"]
+ *     summary: Permanently delete a menu category and its items
+ *     description: If any item in the category was ordered with a booking, the category and its items are deactivated instead.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: restaurantId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Deleted permanently (data.deleted = true) or, when history exists, deactivated instead (data.deactivated = true)
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ */
+
+/**
+ * @openapi
+ * /api/admin/restaurants/{restaurantId}/menu/items/{itemId}/permanent:
+ *   delete:
+ *     tags: ["Admin: Menu"]
+ *     summary: Permanently delete a menu item
+ *     description: If the item was ordered with any booking, it is deactivated instead.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: restaurantId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Deleted permanently (data.deleted = true) or, when history exists, deactivated instead (data.deactivated = true)
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ */
+
 export {};

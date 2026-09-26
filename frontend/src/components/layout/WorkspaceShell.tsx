@@ -6,19 +6,17 @@ import { resolveAssetUrl } from "@/lib/api-client";
 import { useAppStore } from "@/store/app-store";
 import { initials } from "@/lib/format";
 
-const baseNav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+const restaurantNav = [
   { to: "/bookings", label: "Bookings", icon: CalendarDays },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-const superAdminNav = [{ to: "/admins", label: "Admins", icon: UserCog }];
-
 export function WorkspaceShell() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { admin, activeRestaurant, sidebarOpen, setSidebarOpen, clearSession, exitWorkspace } = useAppStore();
-  const nav = admin?.role === "SUPERADMIN" ? [...baseNav, ...superAdminNav] : baseNav;
+  const { admin, selectedAdmin, activeRestaurant, sidebarOpen, setSidebarOpen, clearSession, exitAdminSelection, exitWorkspace } = useAppStore();
+  const isSuperAdmin = admin?.role === "SUPERADMIN";
+  const nav = activeRestaurant ? restaurantNav : [];
   const title = location.pathname.startsWith("/profile")
     ? "My Profile"
     : (nav.find((item) => (item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to)))?.label ?? "Dashboard");
@@ -39,7 +37,22 @@ export function WorkspaceShell() {
       <aside className={clsx("sidebar", sidebarOpen && "sidebar--open")}>
         <div className="sidebar__top"><div className="brand"><span className="brand__mark"><UtensilsCrossed /></span><span>Restaurant Admin</span></div></div>
         <div className="sidebar__scroll">
-          <nav>{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setSidebarOpen(false)} className={({ isActive }) => clsx(isActive && "active")} end={to === "/"}><Icon size={20} /><span>{label}</span></NavLink>)}</nav>
+          <nav className="sidebar__hierarchy">
+            {isSuperAdmin ? (
+              <>
+                <NavLink to="/" onClick={() => { exitWorkspace(); exitAdminSelection(); setSidebarOpen(false); }} className={({ isActive }) => clsx(isActive && !selectedAdmin && !activeRestaurant && "active")} end><LayoutDashboard size={20} /><span>Dashboard</span></NavLink>
+                <NavLink to="/admins" onClick={() => { exitWorkspace(); setSidebarOpen(false); }} className={({ isActive }) => clsx(isActive && "active")}><UserCog size={20} /><span>Admins</span></NavLink>
+              </>
+            ) : (
+              <>
+                <NavLink to="/" onClick={() => { exitWorkspace(); setSidebarOpen(false); }} className={({ isActive }) => clsx(isActive && !activeRestaurant && "active")} end><LayoutDashboard size={20} /><span>Dashboard</span></NavLink>
+                <NavLink to="/restaurants" onClick={() => { exitWorkspace(); setSidebarOpen(false); }} className={({ isActive }) => clsx(isActive && "active")}><UtensilsCrossed size={20} /><span>Restaurants</span></NavLink>
+              </>
+            )}
+            {isSuperAdmin && selectedAdmin && <div className="sidebar__hierarchy-branch"><NavLink className={({ isActive }) => clsx("sidebar__hierarchy-child", "sidebar__hierarchy-admin", isActive && !activeRestaurant && "active")} to="/" onClick={() => { exitWorkspace(); setSidebarOpen(false); }} end><UserCog size={17} /><span>{selectedAdmin.name}</span></NavLink><NavLink className={({ isActive }) => clsx("sidebar__hierarchy-child", "sidebar__hierarchy-restaurant", isActive && "active")} to="/restaurants" onClick={() => { exitWorkspace(); setSidebarOpen(false); }}><UtensilsCrossed size={17} /><span>Restaurants</span></NavLink>{activeRestaurant && <NavLink className="sidebar__hierarchy-child sidebar__hierarchy-restaurant" to="/" onClick={() => setSidebarOpen(false)} end><UtensilsCrossed size={17} /><span>{activeRestaurant.name}</span></NavLink>}</div>}
+            {!isSuperAdmin && activeRestaurant && <NavLink className="sidebar__hierarchy-child" to="/" onClick={() => setSidebarOpen(false)} end><UtensilsCrossed size={17} /><span>{activeRestaurant.name}</span></NavLink>}
+            {activeRestaurant && <div className="sidebar__sections">{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setSidebarOpen(false)} className={({ isActive }) => clsx(isSuperAdmin ? "sidebar__hierarchy-child sidebar__hierarchy-restaurant" : "sidebar__hierarchy-child", isActive && "active")}><Icon size={19} /><span>{label}</span></NavLink>)}</div>}
+          </nav>
           <div className="sidebar__bottom">
             <a href="mailto:support@restaurant.local"><CircleHelp size={20} /><span>Help & support</span></a>
             <div className="user-card">
@@ -56,15 +69,15 @@ export function WorkspaceShell() {
             <div className="workspace-context">
               <span className="workspace-context__crumb">
                 {activeRestaurant?.banner && <img className="workspace-context__thumb" src={resolveAssetUrl(activeRestaurant.banner)} alt="" />}
-                <strong>{activeRestaurant?.name}</strong>
+                <strong>{activeRestaurant?.name ?? selectedAdmin?.name ?? (isSuperAdmin ? "All restaurants" : "My restaurants")}</strong>
               </span>
               <small>{title}</small>
             </div>
           </div>
           <div className="topbar__right">
-            <button type="button" className="context-action" aria-label="Change restaurant" data-label="Change restaurant" onClick={() => { exitWorkspace(); navigate("/"); }}>
+            {activeRestaurant && <button type="button" className="context-action" aria-label="Change restaurant" data-label="Change restaurant" onClick={() => { exitWorkspace(); navigate("/"); }}>
               <Repeat size={15} />
-            </button>
+            </button>}
             <div className="avatar-menu" ref={menuRef}>
               <button type="button" className="avatar-menu__trigger avatar-menu__trigger--labeled" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
                 <span className="avatar-menu__pic"><span className="avatar avatar--small">{initials(admin?.name)}</span></span>
@@ -84,7 +97,7 @@ export function WorkspaceShell() {
         </header>
         <Outlet />
       </div>
-      <nav className="bottom-nav">{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === "/"}><Icon /><span>{label}</span></NavLink>)}</nav>
+      <nav className="bottom-nav">{activeRestaurant ? <><NavLink to="/" end><UtensilsCrossed /><span>{activeRestaurant.name}</span></NavLink>{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to}><Icon /><span>{label}</span></NavLink>)}</> : isSuperAdmin ? <><NavLink to="/" end onClick={() => exitAdminSelection()}><LayoutDashboard /><span>Dashboard</span></NavLink><NavLink to="/admins"><UserCog /><span>Admins</span></NavLink></> : <><NavLink to="/" end><LayoutDashboard /><span>Dashboard</span></NavLink><NavLink to="/restaurants"><UtensilsCrossed /><span>Restaurants</span></NavLink></>}</nav>
     </div>
   );
 }

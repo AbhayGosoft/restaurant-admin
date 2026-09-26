@@ -81,4 +81,23 @@ router.delete(
   }),
 );
 
+// Hard delete. Bookings store the slot's time rather than a FK, so a slot that any booking
+// used is deactivated instead to keep the admin's slot history readable.
+router.delete(
+  "/:slotId/permanent",
+  asyncHandler(async (req, res) => {
+    const restaurantId = idParam(req, "restaurantId");
+    const slotId = idParam(req, "slotId");
+    const slot = await assertSlotInRestaurant(restaurantId, slotId);
+    const bookings = await prisma.restaurantBooking.count({ where: { restaurantId, time: slot.time } });
+    if (bookings > 0) {
+      await prisma.slotConfiguration.update({ where: { id: slotId }, data: { isActive: false } });
+      sendSuccess(res, { deleted: false, deactivated: true }, "This slot has bookings, so it was deactivated instead");
+      return;
+    }
+    await prisma.slotConfiguration.delete({ where: { id: slotId } });
+    sendSuccess(res, { deleted: true, deactivated: false }, "Slot deleted permanently");
+  }),
+);
+
 export default router;

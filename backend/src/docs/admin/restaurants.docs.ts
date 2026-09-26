@@ -16,6 +16,10 @@
  *         schema: { type: string, format: uuid }
  *         description: SuperAdmin only — list restaurants managed by this specific admin instead of the caller's own assignments.
  *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [ACTIVE, INACTIVE] }
+ *         description: Only return active or only deactivated restaurants. Omit for both.
+ *       - in: query
  *         name: page
  *         schema: { type: integer, minimum: 1, default: 1 }
  *       - in: query
@@ -221,4 +225,31 @@
  *       403:
  *         $ref: "#/components/responses/Forbidden"
  */
+/**
+ * @openapi
+ * /api/admin/restaurants/{id}/permanent:
+ *   delete:
+ *     tags: ["Admin: Restaurants"]
+ *     summary: Permanently delete a restaurant (SuperAdmin only)
+ *     description: Removes the restaurant with its menus, slots, tables and assignments. If the restaurant has any bookings, it is deactivated instead.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Deleted permanently (data.deleted = true) or, when history exists, deactivated instead (data.deactivated = true)
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ */
+
 export {};

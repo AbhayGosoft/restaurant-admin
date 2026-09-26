@@ -1,13 +1,15 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { clsx } from "clsx";
-import { Armchair, Building2, Clock, Settings, Tags, UtensilsCrossed } from "lucide-react";
+import { Building2, Clock, Settings, Tags, UtensilsCrossed } from "lucide-react";
+// import { Armchair } from "lucide-react"; // Table booking disabled
 import { useAppStore } from "@/store/app-store";
 
 const baseTabs = [
   { to: "general", label: "General", icon: Building2 },
   { to: "menu", label: "Menu", icon: UtensilsCrossed },
   { to: "slots", label: "Slots", icon: Clock },
-  { to: "tables", label: "Tables", icon: Armchair },
+  // Table booking disabled for now — re-enable together with the "tables" route in App.tsx.
+  // { to: "tables", label: "Tables", icon: Armchair },
 ];
 
 const superAdminTabs = [{ to: "categories", label: "Categories", icon: Tags }];

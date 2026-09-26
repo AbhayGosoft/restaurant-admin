@@ -137,4 +137,31 @@
  *       403:
  *         $ref: "#/components/responses/Forbidden"
  */
+/**
+ * @openapi
+ * /api/admin/admins/{id}/permanent:
+ *   delete:
+ *     tags: ["Admin: Admins"]
+ *     summary: Permanently delete an admin account (SuperAdmin only)
+ *     description: Removes the admin and their restaurant assignments. You cannot delete yourself or the last active SuperAdmin.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Deleted permanently
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ */
+
 export {};

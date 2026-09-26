@@ -141,3 +141,9 @@ export interface ApiEnvelope<T> {
   message: string;
   data: T;
 }
+
+/** Response of every DELETE .../permanent endpoint. */
+export interface HardDeleteResult {
+  deleted: boolean;
+  deactivated: boolean;
+}

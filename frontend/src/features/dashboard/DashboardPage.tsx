@@ -1,63 +1,48 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, CalendarX2, LayoutDashboard, UtensilsCrossed, Users } from "lucide-react";
-import { api, resolveAssetUrl } from "@/lib/api-client";
+import { CalendarCheck, CalendarX2, LayoutDashboard, IndianRupee, Store, Users } from "lucide-react";
+import { api } from "@/lib/api-client";
 import { useAppStore } from "@/store/app-store";
-import type { MenuCategory, Restaurant, RestaurantBooking } from "@/types/domain";
+import type { Restaurant, RestaurantBooking } from "@/types/domain";
 import { LoadingGrid, StateView } from "@/components/ui/StateView";
 
+type BookingResponse = { bookings: RestaurantBooking[] };
+
 export function DashboardPage() {
-  const restaurant = useAppStore((state) => state.activeRestaurant!);
-  const restaurantDetail = useQuery({ queryKey: ["admin-restaurant", restaurant.id], queryFn: () => api<Restaurant>(`/admin/restaurants/${restaurant.id}`) });
-  const bookings = useQuery({ queryKey: ["admin-bookings", restaurant.id, "", 1, false], queryFn: () => api<{ bookings: RestaurantBooking[] }>(`/admin/bookings?${new URLSearchParams({ restaurantId: restaurant.id, limit: "100" })}`) });
-  const menu = useQuery({ queryKey: ["menu-categories", restaurant.id], queryFn: () => api<MenuCategory[]>(`/admin/restaurants/${restaurant.id}/menu/categories`) });
-
-  if (restaurantDetail.isLoading) return <main className="page"><LoadingGrid /></main>;
-  if (restaurantDetail.isError) return <main className="page"><StateView title="Couldn't load dashboard" message="Check the backend connection and try once more." action={() => void restaurantDetail.refetch()} /></main>;
-
+  const restaurant = useAppStore((state) => state.activeRestaurant);
+  const selectedAdmin = useAppStore((state) => state.selectedAdmin);
+  const isSuperAdmin = useAppStore((state) => state.admin?.role === "SUPERADMIN");
+  const scope = restaurant ? "restaurant" : selectedAdmin ? "admin" : isSuperAdmin ? "all" : "admin";
+  const restaurants = useQuery({
+    queryKey: ["dashboard-restaurants", selectedAdmin?.id ?? "accessible"], enabled: !restaurant,
+    queryFn: () => api<{ restaurants: Restaurant[] }>(`/admin/restaurants?${new URLSearchParams({ ...(selectedAdmin ? { adminId: selectedAdmin.id } : {}), limit: "500" })}`),
+  });
+  const bookings = useQuery({
+    queryKey: ["dashboard-bookings", scope, selectedAdmin?.id ?? "", restaurant?.id ?? ""], enabled: Boolean(restaurant) || restaurants.isSuccess,
+    queryFn: async () => {
+      if (restaurant) return api<BookingResponse>(`/admin/bookings?${new URLSearchParams({ restaurantId: restaurant.id, limit: "100" })}`);
+      const ids = restaurants.data?.restaurants.map((item) => item.id) ?? [];
+      const results = await Promise.all(ids.map((id) => api<BookingResponse>(`/admin/bookings?${new URLSearchParams({ restaurantId: id, limit: "100" })}`)));
+      return { bookings: results.flatMap((result) => result.bookings) };
+    },
+  });
+  if ((!restaurant && restaurants.isLoading) || bookings.isLoading) return <main className="page"><LoadingGrid /></main>;
+  if (restaurants.isError || bookings.isError) return <main className="page"><StateView title="Couldn't load dashboard" message="Check the backend connection and try once more." action={() => { void restaurants.refetch(); void bookings.refetch(); }} /></main>;
   const allBookings = bookings.data?.bookings ?? [];
-  const upcoming = allBookings.filter((b) => b.status === "upcoming");
-  const cancelled = allBookings.filter((b) => b.status === "cancelled");
   const today = new Date().toISOString().slice(0, 10);
-  const todayBookings = allBookings.filter((b) => b.date === today);
-  const itemCount = menu.data?.reduce((sum, category) => sum + category.items.length, 0) ?? 0;
-
-  return (
-    <main className="page">
-      <section className="resource-head">
-        <span className="eyebrow"><LayoutDashboard size={14} /> Dashboard</span>
-      </section>
-
-      <section className="restaurant-hero-card">
-        {restaurantDetail.data?.banner && <img src={resolveAssetUrl(restaurantDetail.data.banner)} alt="" />}
-        <div>
-          <strong>{restaurantDetail.data?.name}</strong>
-          <small>{restaurantDetail.data?.cuisineLabel}</small>
-          <small className="muted">{restaurantDetail.data?.addressLine}, {restaurantDetail.data?.city}</small>
-        </div>
-      </section>
-
-      <div className="stat-grid">
-        <div className="stat-card"><CalendarCheck size={20} /><div><strong>{todayBookings.length}</strong><small>Bookings today</small></div></div>
-        <div className="stat-card"><Users size={20} /><div><strong>{upcoming.length}</strong><small>Upcoming bookings</small></div></div>
-        <div className="stat-card"><CalendarX2 size={20} /><div><strong>{cancelled.length}</strong><small>Cancelled</small></div></div>
-        <div className="stat-card"><UtensilsCrossed size={20} /><div><strong>{itemCount}</strong><small>Menu items</small></div></div>
-      </div>
-
-      <section className="card">
-        <header className="menu-category-card__head"><strong>Recent bookings</strong></header>
-        {!allBookings.length && <small className="muted">No bookings yet.</small>}
-        <div className="menu-item-list">
-          {allBookings.slice(0, 8).map((booking) => (
-            <div className="menu-item-row" key={booking.id}>
-              <div className="menu-item-row__body">
-                <strong>{booking.fullName}</strong>
-                <small>{booking.humanBookingId} · {booking.date} at {booking.time} · {booking.people} people</small>
-              </div>
-              <span className={`badge badge--${booking.status}`}>{booking.status}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-    </main>
-  );
+  const todayBookings = allBookings.filter((booking) => booking.date === today);
+  const upcoming = allBookings.filter((booking) => booking.status === "upcoming");
+  const revenue = allBookings.filter((booking) => booking.status !== "cancelled").reduce((total, booking) => total + (booking.preorder?.total ?? booking.advancePaid ?? 0), 0);
+  const heading = restaurant?.name ?? selectedAdmin?.name ?? (isSuperAdmin ? "All restaurants" : "My restaurants");
+  const subheading = restaurant ? "Restaurant analytics" : selectedAdmin ? "Admin analytics" : isSuperAdmin ? "Organisation-wide analytics" : "Your restaurant analytics";
+  return <main className="page">
+    <section className="resource-head"><span className="eyebrow"><LayoutDashboard size={14} /> {subheading}</span></section>
+    <section className="restaurant-hero-card"><div><strong>{heading}</strong><small>{restaurant ? "Selected restaurant dashboard" : "Bookings and performance across the current scope"}</small></div></section>
+    <div className="stat-grid">
+      <div className="stat-card"><IndianRupee size={20} /><div><strong>₹{revenue.toLocaleString("en-IN")}</strong><small>Booking revenue</small></div></div>
+      <div className="stat-card"><CalendarCheck size={20} /><div><strong>{todayBookings.length}</strong><small>Bookings today</small></div></div>
+      <div className="stat-card"><Users size={20} /><div><strong>{upcoming.length}</strong><small>Upcoming bookings</small></div></div>
+      <div className="stat-card">{restaurant ? <Store size={20} /> : <CalendarX2 size={20} />}<div><strong>{restaurant ? 1 : restaurants.data?.restaurants.length ?? 0}</strong><small>{restaurant ? "Restaurant" : "Restaurants"}</small></div></div>
+    </div>
+    <section className="card"><header className="menu-category-card__head"><strong>Recent bookings</strong></header>{!allBookings.length && <small className="muted">No bookings yet.</small>}<div className="menu-item-list">{allBookings.slice(0, 8).map((booking) => <div className="menu-item-row" key={booking.id}><div className="menu-item-row__body"><strong>{booking.fullName}</strong><small>{booking.restaurantName} · {booking.date} at {booking.time} · {booking.people} people</small></div><span className={`badge badge--${booking.status}`}>{booking.status}</span></div>)}</div></section>
+  </main>;
 }

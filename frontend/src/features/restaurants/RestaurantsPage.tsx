@@ -2,14 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, MapPin, Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, MapPin, Plus, RotateCcw, Trash2, UtensilsCrossed } from "lucide-react";
 import { api, resolveAssetUrl } from "@/lib/api-client";
 import { queryClient } from "@/lib/query-client";
 import { useAppStore } from "@/store/app-store";
-import type { Restaurant } from "@/types/domain";
+import type { HardDeleteResult, Restaurant } from "@/types/domain";
 import { Button } from "@/components/ui/Button";
 import { LoadingGrid, StateView } from "@/components/ui/StateView";
-import { DialogFooter, FieldError, PhoneField, ResourceDialog, ResourceToolbar, Req, cleanBody } from "@/components/resource/dialog-kit";
+import { ConfirmDialog, DialogFooter, FieldError, Notice, PhoneField, ResourceDialog, ResourceToolbar, Req, StatusTabs, cleanBody, hardDeleteMessage, type ListStatus } from "@/components/resource/dialog-kit";
 
 type CreateForm = {
   name: string; cuisineLabel: string; addressLine: string; city: string; phone: string;
@@ -23,7 +23,7 @@ const emptyForm: CreateForm = {
   priceForTwo: 300, seatingCapacity: 40, maxPartySize: 12,
 };
 
-export function RestaurantsPage() {
+export function RestaurantsPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const enterRestaurant = useAppStore((state) => state.enterRestaurant);
   const isSuperAdmin = useAppStore((state) => state.admin?.role === "SUPERADMIN");
@@ -31,14 +31,19 @@ export function RestaurantsPage() {
   const exitAdminSelection = useAppStore((state) => state.exitAdminSelection);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [restaurantToDeactivate, setRestaurantToDeactivate] = useState<Restaurant | null>(null);
+  const [restaurantToDelete, setRestaurantToDelete] = useState<Restaurant | null>(null);
+  const [view, setView] = useState<ListStatus>("active");
+  const [notice, setNotice] = useState("");
 
   const restaurants = useQuery({
-    queryKey: ["admin-restaurants", search, selectedAdmin?.id ?? "self"],
+    queryKey: ["admin-restaurants", search, selectedAdmin?.id ?? "self", view],
     queryFn: () =>
       api<{ restaurants: Restaurant[] }>(
         `/admin/restaurants?${new URLSearchParams({
           ...(search ? { search } : {}),
           ...(selectedAdmin ? { adminId: selectedAdmin.id } : {}),
+          status: view === "active" ? "ACTIVE" : "INACTIVE",
           limit: "100",
         })}`,
       ),
@@ -64,14 +69,28 @@ export function RestaurantsPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-restaurants"] }),
   });
 
+  const activate = useMutation({
+    mutationFn: (id: string) => api(`/admin/restaurants/${id}`, { method: "PATCH", body: { status: "ACTIVE" } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-restaurants"] }),
+  });
+
+  const remove = useMutation({
+    mutationFn: (restaurant: Restaurant) => api<HardDeleteResult>(`/admin/restaurants/${restaurant.id}/permanent`, { method: "DELETE" }),
+    onSuccess: (result, restaurant) => {
+      setNotice(hardDeleteMessage(restaurant.name, result));
+      setRestaurantToDelete(null);
+      void queryClient.invalidateQueries({ queryKey: ["admin-restaurants"] });
+    },
+  });
+
   const enter = (restaurant: Restaurant) => {
     enterRestaurant({ id: restaurant.id, name: restaurant.name, banner: restaurant.banner });
     navigate("/");
   };
 
   return (
-    <main className="page">
-      {selectedAdmin && (
+    <div className={embedded ? "" : "page"}>
+      {!embedded && selectedAdmin && (
         <Button type="button" variant="ghost" onClick={() => { exitAdminSelection(); navigate("/"); }}>
           <ArrowLeft size={14} /> Back to admins
         </Button>
@@ -84,10 +103,15 @@ export function RestaurantsPage() {
       </section>
 
       <ResourceToolbar search={search} onSearchChange={setSearch} placeholder="Search restaurants..." />
+      <StatusTabs value={view} onChange={setView} />
+      {notice && <Notice message={notice} onClose={() => setNotice("")} />}
 
       {restaurants.isLoading && <LoadingGrid />}
       {restaurants.isError && <StateView title="Couldn't load restaurants" message="Check the backend connection and try once more." action={() => void restaurants.refetch()} />}
-      {restaurants.isSuccess && !restaurants.data.restaurants.length && (
+      {restaurants.isSuccess && !restaurants.data.restaurants.length && view === "inactive" && (
+        <StateView title="No deactivated restaurants" message="Restaurants you deactivate will show up here." />
+      )}
+      {restaurants.isSuccess && !restaurants.data.restaurants.length && view === "active" && (
         <StateView
           title="No restaurants yet"
           message={
@@ -102,7 +126,7 @@ export function RestaurantsPage() {
 
       <div className="card-grid">
         {restaurants.data?.restaurants.map((restaurant) => (
-          <button type="button" className="card restaurant-picker-card" key={restaurant.id} onClick={() => enter(restaurant)}>
+          <button type="button" className={`card restaurant-picker-card${restaurant.status === "INACTIVE" ? " restaurant-picker-card--inactive" : ""}`} key={restaurant.id} onClick={() => enter(restaurant)}>
             {restaurant.banner ? <img src={resolveAssetUrl(restaurant.banner)} alt="" /> : <span className="restaurant-picker-card__placeholder"><UtensilsCrossed /></span>}
             <div className="restaurant-picker-card__body">
               <strong>{restaurant.name}</strong>
@@ -111,14 +135,22 @@ export function RestaurantsPage() {
             </div>
             <ArrowRight size={18} />
             {isSuperAdmin && (
-              <span
-                role="button"
-                tabIndex={0}
-                className="icon-button restaurant-picker-card__delete"
-                aria-label="Deactivate restaurant"
-                onClick={(event) => { event.stopPropagation(); deactivate.mutate(restaurant.id); }}
-              >
-                <Trash2 size={14} />
+              <span className="restaurant-picker-card__actions">
+                {restaurant.status === "INACTIVE" ? (
+                  <span role="button" tabIndex={0} className="icon-button" aria-label="Activate restaurant" title="Activate"
+                    onClick={(event) => { event.stopPropagation(); if (!activate.isPending) activate.mutate(restaurant.id); }}>
+                    <RotateCcw size={14} />
+                  </span>
+                ) : (
+                  <span role="button" tabIndex={0} className="icon-button" aria-label="Deactivate restaurant" title="Deactivate"
+                    onClick={(event) => { event.stopPropagation(); setRestaurantToDeactivate(restaurant); }}>
+                    <Ban size={14} />
+                  </span>
+                )}
+                <span role="button" tabIndex={0} className="icon-button icon-button--danger" aria-label="Delete restaurant permanently" title="Delete permanently"
+                  onClick={(event) => { event.stopPropagation(); remove.reset(); setRestaurantToDelete(restaurant); }}>
+                  <Trash2 size={14} />
+                </span>
               </span>
             )}
           </button>
@@ -156,6 +188,8 @@ export function RestaurantsPage() {
           </form>
         </ResourceDialog>
       )}
-    </main>
+      {restaurantToDeactivate && <ConfirmDialog title="Deactivate restaurant?" message={`${restaurantToDeactivate.name} will no longer be available for bookings.`} loading={deactivate.isPending} onClose={() => setRestaurantToDeactivate(null)} onConfirm={() => deactivate.mutate(restaurantToDeactivate.id, { onSuccess: () => setRestaurantToDeactivate(null) })} />}
+      {restaurantToDelete && <ConfirmDialog title="Delete restaurant permanently?" message={`${restaurantToDelete.name} and its menu, slots and tables will be removed. If it has any bookings, it will be deactivated instead.`} confirmLabel="Delete permanently" danger loading={remove.isPending} error={remove.error?.message} onClose={() => setRestaurantToDelete(null)} onConfirm={() => remove.mutate(restaurantToDelete)} />}
+    </div>
   );
 }

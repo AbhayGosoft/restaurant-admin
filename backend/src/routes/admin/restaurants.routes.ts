@@ -45,6 +45,8 @@ const toAdminRestaurant = (restaurant: any) => ({
 const listQuerySchema = z.object({
   search: z.string().trim().optional(),
   adminId: z.string().uuid().optional(),
+  // Lets the UI show active and deactivated restaurants as separate lists.
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   // Capped at 500 rather than 100 because AdminsPage fetches up to 200 in one shot to
   // populate the "assigned restaurants" checkbox list, not just to paginate a table.
@@ -66,6 +68,7 @@ router.get(
         : { admins: { some: { adminId: req.admin!.id } } };
     const where = {
       ...scopedWhere,
+      ...(query.status ? { status: query.status } : {}),
       ...(query.search ? { OR: [{ name: { contains: query.search } }, { city: { contains: query.search } }] } : {}),
     };
 
@@ -149,7 +152,8 @@ router.get(
   }),
 );
 
-const updateSchema = createSchema.partial();
+// status lets a deactivated restaurant be switched back to ACTIVE from the admin UI.
+const updateSchema = createSchema.partial().extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() });
 
 router.patch(
   "/:id",
@@ -195,6 +199,26 @@ router.delete(
     const id = idParam(req);
     await prisma.restaurant.update({ where: { id }, data: { status: "INACTIVE" } });
     sendSuccess(res, {}, "Restaurant deactivated");
+  }),
+);
+
+// Hard delete (SuperAdmin only). A restaurant with any bookings is deactivated instead so
+// booking/payment history stays intact; otherwise menus, slots, tables and links cascade away.
+router.delete(
+  "/:id/permanent",
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    const id = idParam(req);
+    const restaurant = await prisma.restaurant.findUnique({ where: { id } });
+    if (!restaurant) throw new ApiError(404, "Restaurant not found");
+    const bookings = await prisma.restaurantBooking.count({ where: { restaurantId: id } });
+    if (bookings > 0) {
+      await prisma.restaurant.update({ where: { id }, data: { status: "INACTIVE" } });
+      sendSuccess(res, { deleted: false, deactivated: true }, "This restaurant has bookings, so it was deactivated instead");
+      return;
+    }
+    await prisma.restaurant.delete({ where: { id } });
+    sendSuccess(res, { deleted: true, deactivated: false }, "Restaurant deleted permanently");
   }),
 );
 

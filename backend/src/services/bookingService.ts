@@ -1,7 +1,10 @@
 import type { RestaurantBooking } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { getActiveRestaurantOrThrow } from "./restaurantService.js";
-import { findAvailableTable, getBookedSeatCount } from "./slotService.js";
+import { getBookedSeatCount } from "./slotService.js";
+// Table booking flow is disabled for now — bookings are capacity-based menu orders.
+// import { findAvailableTable } from "./slotService.js";
+import { calculateMenuTotal } from "./paymentService.js";
 import { cancelReminder, scheduleReminder } from "../queues/reminderQueue.js";
 import { notifyCustomer } from "./notificationService.js";
 import { emitToRestaurant } from "../socket/server.js";
@@ -54,7 +57,8 @@ export type CreateBookingInput = {
   date: string;
   time: string;
   people: number;
-  tablePreference: string;
+  /** Table booking disabled — optional, defaults to "Any Table". */
+  tablePreference?: string;
   specialRequest?: string;
   fullName: string;
   mobileNumber: string;
@@ -63,8 +67,9 @@ export type CreateBookingInput = {
   razorpayPaymentId: string;
   latitude?: number;
   longitude?: number;
-  tableId?: string;
-  preorderItems?: Array<{ menuItemId: string; quantity: number; note?: string }>;
+  // tableId?: string; // Table booking disabled
+  /** Menu items ordered with this booking — required, and their total is what the customer paid. */
+  preorderItems: Array<{ menuItemId: string; quantity: number; note?: string }>;
 };
 
 const bookingInclude = { table: true, preorder: { include: { items: true } } } as const;
@@ -78,7 +83,7 @@ const preparePreorder = async (client: any, restaurantId: string, items: CreateB
   return items.map((item) => {
     const menuItem = byId.get(item.menuItemId)!;
     const unitPrice = Number(menuItem.price);
-    return { menuItemId: menuItem.id, itemName: menuItem.name, unitPrice, quantity: item.quantity, note: item.note, lineTotal: unitPrice * item.quantity };
+    return { menuItemId: menuItem.id, itemName: menuItem.name, unitPrice, quantity: item.quantity, note: item.note, lineTotal: Math.round(unitPrice * item.quantity * 100) / 100 };
   });
 };
 
@@ -110,8 +115,9 @@ export const createBooking = async (customerId: string, restaurantId: string, in
     throw new ApiError(422, `people must be between 1 and ${restaurant.maxPartySize}.`);
   }
 
-  const tablePreference = TABLE_PREFERENCE_BY_LABEL[input.tablePreference];
+  const tablePreference = TABLE_PREFERENCE_BY_LABEL[input.tablePreference ?? TABLE_PREFERENCE_LABELS.ANY];
   if (!tablePreference) throw new ApiError(422, "Invalid tablePreference.");
+  if (!input.preorderItems?.length) throw new ApiError(422, "Select at least one menu item.");
 
   const payment = await prisma.payment.findUnique({ where: { razorpayOrderId: input.razorpayOrderId } });
   if (!payment || payment.restaurantUserId !== customerId) throw new ApiError(404, "Payment order not found.");
@@ -120,6 +126,13 @@ export const createBooking = async (customerId: string, restaurantId: string, in
 
   const alreadyUsed = await prisma.restaurantBooking.findUnique({ where: { paymentId: payment.id } });
   if (alreadyUsed) throw new ApiError(409, "This payment has already been used for a booking.");
+
+  // The payment was created for a specific basket; the booking must carry the same basket total,
+  // otherwise a customer could pay for one item and book with more.
+  const orderTotal = await calculateMenuTotal(prisma, restaurantId, input.preorderItems);
+  if (Math.abs(orderTotal - Number(payment.amount)) > 0.009) {
+    throw new ApiError(409, "Selected menu items do not match the paid amount. Please pay again.");
+  }
 
   const distanceKm =
     input.latitude !== undefined && input.longitude !== undefined
@@ -130,12 +143,11 @@ export const createBooking = async (customerId: string, restaurantId: string, in
     // Row lock on the restaurant serializes concurrent booking attempts for the same
     // restaurant/date/time so the capacity re-check below can't race.
     await tx.$queryRaw`SELECT id FROM restaurants WHERE id = ${restaurantId} FOR UPDATE`;
-    const selection = await findAvailableTable(tx, { restaurantId, date, time: time24, people: input.people, preference: tablePreference, tableId: input.tableId });
-    if (selection.hasTables && !selection.table) throw new ApiError(409, "No suitable table is available for this slot.");
-    if (!selection.hasTables) {
-      const booked = await getBookedSeatCount(tx, { restaurantId, date, time: time24 });
-      if (restaurant.seatingCapacity - booked < input.people) throw new ApiError(409, "Selected slot no longer has enough capacity.");
-    }
+    // Table booking disabled — capacity-only check.
+    // const selection = await findAvailableTable(tx, { restaurantId, date, time: time24, people: input.people, preference: tablePreference, tableId: input.tableId });
+    // if (selection.hasTables && !selection.table) throw new ApiError(409, "No suitable table is available for this slot.");
+    const booked = await getBookedSeatCount(tx, { restaurantId, date, time: time24 });
+    if (restaurant.seatingCapacity - booked < input.people) throw new ApiError(409, "Selected slot no longer has enough capacity.");
     const preorderItems = await preparePreorder(tx, restaurantId, input.preorderItems);
     return tx.restaurantBooking.create({
       data: {
@@ -157,7 +169,7 @@ export const createBooking = async (customerId: string, restaurantId: string, in
         email: input.email,
         advancePaid: payment.amount,
         paymentId: payment.id,
-        tableId: selection.table?.id,
+        // tableId: selection.table?.id, // Table booking disabled
         ...(preorderItems ? { preorder: { create: { subtotal: preorderItems.reduce((sum, item) => sum + item.lineTotal, 0), total: preorderItems.reduce((sum, item) => sum + item.lineTotal, 0), items: { create: preorderItems } } } } : {}),
       },
       include: bookingInclude,
@@ -175,7 +187,7 @@ export const createBooking = async (customerId: string, restaurantId: string, in
     type: "BOOKING_CONFIRMED",
     bookingId: booking.id,
     title: "Booking confirmed",
-    body: `Your table at ${restaurant.name} on ${input.date} at ${input.time} is confirmed.`,
+    body: `Your booking at ${restaurant.name} on ${input.date} at ${input.time} is confirmed.`,
   });
   emitToRestaurant(restaurantId, socketEvents.bookingNew, booking);
 
@@ -242,9 +254,10 @@ export const modifyBooking = async (customerId: string, id: string, input: Modif
     if (restaurant.seatingCapacity - booked < nextPeople) {
       throw new ApiError(409, "Selected slot no longer has enough capacity.");
     }
-    const selection = await findAvailableTable(tx, { restaurantId: existing.restaurantId, date: nextDate, time: nextTime24, people: nextPeople, preference: existing.tablePreference, tableId: existing.tableId ?? undefined, excludeBookingId: existing.id });
-    if (selection.hasTables && !selection.table) throw new ApiError(409, "No suitable table is available for this slot.");
-    return tx.restaurantBooking.update({ where: { id }, data: { date: nextDate, time: nextTime24, people: nextPeople, tableId: selection.table?.id }, include: bookingInclude });
+    // Table booking disabled — capacity check above is the only availability rule.
+    // const selection = await findAvailableTable(tx, { restaurantId: existing.restaurantId, date: nextDate, time: nextTime24, people: nextPeople, preference: existing.tablePreference, tableId: existing.tableId ?? undefined, excludeBookingId: existing.id });
+    // if (selection.hasTables && !selection.table) throw new ApiError(409, "No suitable table is available for this slot.");
+    return tx.restaurantBooking.update({ where: { id }, data: { date: nextDate, time: nextTime24, people: nextPeople }, include: bookingInclude });
   });
 
   await cancelReminder(existing.reminderJobId);

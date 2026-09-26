@@ -117,4 +117,31 @@
  *       404:
  *         $ref: "#/components/responses/NotFound"
  */
+/**
+ * @openapi
+ * /api/admin/categories/{id}/permanent:
+ *   delete:
+ *     tags: ["Admin: Categories"]
+ *     summary: Permanently delete a restaurant category (SuperAdmin only)
+ *     description: Removes the category and unlinks it from every restaurant.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Deleted permanently
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ */
+
 export {};

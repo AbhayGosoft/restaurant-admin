@@ -46,9 +46,11 @@ export const getAvailableSlots = async (restaurantId: string, dateStr: string, p
   if (!Number.isInteger(people) || people < 1) {
     throw new ApiError(422, "people must be a positive integer.");
   }
-  const preference = preferenceLabel ? TABLE_PREFERENCE_BY_LABEL[preferenceLabel] : "ANY";
+  // Table booking disabled — preference is accepted but no longer affects availability.
+  // const preference = preferenceLabel ? TABLE_PREFERENCE_BY_LABEL[preferenceLabel] : "ANY";
+  void preferenceLabel;
 
-  const [slotConfigs, seatsByTime, rawTables, rawBookedTables] = await Promise.all([
+  const [slotConfigs, seatsByTime] = await Promise.all([
     prisma.slotConfiguration.findMany({
       where: { restaurantId, isActive: true },
       orderBy: [{ meal: "asc" }, { time: "asc" }],
@@ -58,45 +60,31 @@ export const getAvailableSlots = async (restaurantId: string, dateStr: string, p
       where: { restaurantId, date, status: "UPCOMING" },
       _sum: { people: true },
     }),
-    prisma.diningTable.findMany({ where: { restaurantId, status: "ACTIVE" }, orderBy: [{ capacity: "asc" }, { name: "asc" }] }),
-    prisma.restaurantBooking.findMany({
-      where: { restaurantId, date, status: "UPCOMING", tableId: { not: null } },
-      select: { time: true, tableId: true },
-    }),
+    // Table booking disabled:
+    // prisma.diningTable.findMany({ where: { restaurantId, status: "ACTIVE" }, orderBy: [{ capacity: "asc" }, { name: "asc" }] }),
+    // prisma.restaurantBooking.findMany({
+    //   where: { restaurantId, date, status: "UPCOMING", tableId: { not: null } },
+    //   select: { time: true, tableId: true },
+    // }),
   ]);
-
-  // Older callers and tests may not yet mock the newly introduced table queries.
-  // Treat an absent result exactly like a restaurant with no configured tables so
-  // the original capacity-based availability contract remains valid.
-  const tables = rawTables ?? [];
-  const bookedTables = rawBookedTables ?? [];
 
   const bookedByTime = new Map(seatsByTime.map((row) => [row.time, row._sum.people ?? 0]));
 
-  const tableIdsByTime = new Map<string, Set<string>>();
-  bookedTables.forEach(({ time, tableId }) => {
-    if (!tableId) return;
-    const ids = tableIdsByTime.get(time) ?? new Set<string>();
-    ids.add(tableId);
-    tableIdsByTime.set(time, ids);
-  });
+  // Table booking disabled:
+  // const tableIdsByTime = new Map<string, Set<string>>();
+  // bookedTables.forEach(({ time, tableId }) => { ... });
   const groupsByMeal = new Map<string, { label: string; slots: Array<Record<string, unknown>> }>();
 
   for (const slot of slotConfigs) {
     const booked = bookedByTime.get(slot.time) ?? 0;
     const seatsLeft = Math.max(restaurant.seatingCapacity - booked, 0);
-    const freeTables = tables.filter((table) => table.capacity >= people && (preference === "ANY" || table.preference === preference) && !tableIdsByTime.get(slot.time)?.has(table.id));
-    // Restaurants without configured physical tables keep the original capacity workflow.
-    const available = tables.length ? freeTables.length > 0 : seatsLeft >= people;
-
-    const rawSeatsLeft = tables.length ? freeTables.reduce((sum, table) => sum + table.capacity, 0) : seatsLeft;
+    // Table booking disabled — availability is purely seat-capacity based.
+    // const freeTables = tables.filter((table) => table.capacity >= people && (preference === "ANY" || table.preference === preference) && !tableIdsByTime.get(slot.time)?.has(table.id));
+    // const available = tables.length ? freeTables.length > 0 : seatsLeft >= people;
+    const available = seatsLeft >= people;
 
     const group = groupsByMeal.get(slot.meal) ?? { label: mealLabel(slot.meal), slots: [] };
-    group.slots.push({
-      time: to12Hour(slot.time), available, seatsLeft: available ? rawSeatsLeft : undefined,
-      availableTableCount: freeTables.length,
-      ...(tables.length ? { availableTables: freeTables.map((table) => ({ id: table.id, name: table.name, capacity: table.capacity, preference: table.preference, section: table.section })) } : {}),
-    });
+    group.slots.push({ time: to12Hour(slot.time), available, seatsLeft: available ? seatsLeft : undefined });
     groupsByMeal.set(slot.meal, group);
   }
 

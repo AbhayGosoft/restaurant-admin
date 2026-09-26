@@ -85,6 +85,7 @@ describe("createBooking", () => {
     mobileNumber: "+919876543210",
     razorpayOrderId: "order_1",
     razorpayPaymentId: "pay_1",
+    preorderItems: [{ menuItemId: "item-1", quantity: 2 }],
   };
 
   const mockHappyPath = () => {
@@ -99,9 +100,29 @@ describe("createBooking", () => {
     });
     prisma.restaurantBooking.findUnique.mockResolvedValue(null);
     prisma.restaurantBooking.aggregate.mockResolvedValue({ _sum: { people: 0 } });
+    // 2 x 49.50 = 99, matching the verified payment amount.
+    prisma.menuItem.findMany.mockResolvedValue([{ id: "item-1", name: "Paneer Tikka", price: "49.50" }]);
     prisma.restaurantBooking.create.mockResolvedValue(baseBooking());
     prisma.restaurantBooking.update.mockResolvedValue(baseBooking());
   };
+
+  it("rejects a booking without any menu items", async () => {
+    mockHappyPath();
+    await expect(createBooking("customer-A", "r1", { ...validInput, preorderItems: [] })).rejects.toThrow(/at least one menu item/i);
+  });
+
+  it("rejects when the menu items total differs from the paid amount", async () => {
+    mockHappyPath();
+    await expect(createBooking("customer-A", "r1", { ...validInput, preorderItems: [{ menuItemId: "item-1", quantity: 3 }] })).rejects.toThrow(/do not match the paid amount/i);
+  });
+
+  it("does not assign a table (table booking disabled)", async () => {
+    mockHappyPath();
+    await createBooking("customer-A", "r1", validInput);
+    const data = prisma.restaurantBooking.create.mock.calls[0][0].data;
+    expect(data.tableId).toBeUndefined();
+    expect(data.preorder.create.total).toBe(99);
+  });
 
   it("rejects a date more than 60 days out", async () => {
     mockHappyPath();

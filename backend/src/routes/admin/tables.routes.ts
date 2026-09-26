@@ -62,4 +62,19 @@ router.delete("/:tableId", asyncHandler(async (req, res) => {
   await prisma.diningTable.update({ where: { id: tableId }, data: { status: "INACTIVE" } });
   sendSuccess(res, {}, "Table deactivated");
 }));
+// Hard delete. Tables assigned to any booking are deactivated instead (deleting would null out
+// the booking's table via onDelete: SetNull and lose that history).
+router.delete("/:tableId/permanent", asyncHandler(async (req, res) => {
+  const restaurantId = idParam(req, "restaurantId"); const tableId = idParam(req, "tableId");
+  await assertTable(restaurantId, tableId);
+  const bookings = await prisma.restaurantBooking.count({ where: { tableId } });
+  if (bookings > 0) {
+    await prisma.diningTable.update({ where: { id: tableId }, data: { status: "INACTIVE" } });
+    sendSuccess(res, { deleted: false, deactivated: true }, "This table has bookings, so it was deactivated instead");
+    return;
+  }
+  await prisma.diningTable.delete({ where: { id: tableId } });
+  sendSuccess(res, { deleted: true, deactivated: false }, "Table deleted permanently");
+}));
+
 export default router;

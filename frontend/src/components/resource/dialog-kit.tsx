@@ -421,6 +421,35 @@ export function DialogFooter({ onClose, loading, label }: { onClose: () => void;
   return <footer><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" loading={loading}>{label}</Button></footer>;
 }
 
+export function ConfirmDialog({ title, message, onClose, onConfirm, loading = false, confirmLabel = "Deactivate", danger = false, error }: { title: string; message: string; onClose: () => void; onConfirm: () => void; loading?: boolean; confirmLabel?: string; danger?: boolean; error?: string }) {
+  return <ResourceDialog title={title} eyebrow="Confirmation required" onClose={loading ? () => undefined : onClose} dialogClassName="confirm-dialog">
+    <p className="confirm-dialog__message">{message}</p>
+    {error && <div className="form-error">{error}</div>}
+    <footer><Button type="button" variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button><Button type="button" className={clsx(danger && "button--danger")} loading={loading} onClick={onConfirm}>{confirmLabel}</Button></footer>
+  </ResourceDialog>;
+}
+
+export type ListStatus = "active" | "inactive";
+
+/** Active and deactivated records are listed separately so deactivated ones never mix into the working list. */
+export function StatusTabs({ value, onChange, activeCount, inactiveCount }: { value: ListStatus; onChange: (value: ListStatus) => void; activeCount?: number; inactiveCount?: number }) {
+  const tab = (status: ListStatus, label: string, count?: number) => (
+    <button type="button" role="tab" aria-selected={value === status} className={clsx("status-tab", value === status && "active")} onClick={() => onChange(status)}>
+      {label}{count !== undefined && <span className="status-tab__count">{count}</span>}
+    </button>
+  );
+  return <div className="status-tabs" role="tablist">{tab("active", "Active", activeCount)}{tab("inactive", "Deactivated", inactiveCount)}</div>;
+}
+
+export function Notice({ message, onClose }: { message: string; onClose: () => void }) {
+  return <div className="form-notice" role="status"><span>{message}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={onClose}><X size={14} /></button></div>;
+}
+
+/** Message for a hard-delete result — the API deactivates instead of deleting when the record has booking history. */
+export function hardDeleteMessage(name: string, result: { deleted: boolean; deactivated: boolean }) {
+  return result.deleted ? `${name} was deleted permanently.` : `${name} has booking history, so it was deactivated instead of deleted.`;
+}
+
 export function CheckboxList({ title, items, selected, onChange }: { title: string; items: { id: string; label: string }[]; selected: string[]; onChange: (ids: string[]) => void }) {
   return (
     <div className="property-form-grid__wide choice-panel">

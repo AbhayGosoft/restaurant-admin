@@ -62,13 +62,14 @@ export function BookingsPage() {
 
       {query.isLoading && <LoadingGrid />}
       {query.isError && <StateView title="Couldn't load bookings" message="Check the backend connection and try once more." action={() => void query.refetch()} />}
-      {query.isSuccess && !bookings.length && <StateView title="No bookings found" message="Bookings will show up here once customers start reserving tables." />}
+      {query.isSuccess && !bookings.length && <StateView title="No bookings found" message="Bookings will show up here once customers start placing orders." />}
 
       {bookings.length > 0 && (
         <div className="table-scroll">
           <table className="data-table">
             <thead>
-              <tr><th>Booking</th><th>Guest</th><th>Date &amp; time</th><th>Table</th><th>People</th><th>Status</th><th>Advance</th></tr>
+              {/* Table booking disabled — the Table column is replaced by the ordered items count. */}
+              <tr><th>Booking</th><th>Guest</th><th>Date &amp; time</th><th>Items</th><th>People</th><th>Status</th><th>Paid</th></tr>
             </thead>
             <tbody>
               {bookings.map((booking) => (
@@ -76,7 +77,8 @@ export function BookingsPage() {
                   <td>{booking.humanBookingId}</td>
                   <td>{booking.fullName}<br /><small className="muted">{booking.mobileNumber}</small></td>
                   <td>{booking.date} · {booking.time}</td>
-                  <td>{booking.table?.name ?? "Auto/capacity"}</td>
+                  {/* <td>{booking.table?.name ?? "Auto/capacity"}</td> */}
+                  <td>{booking.preorder?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0}</td>
                   <td>{booking.people}</td>
                   <td><span className={clsx("badge", `badge--${booking.status}`)}>{booking.status}</span></td>
                   <td>₹{booking.advancePaid}</td>
@@ -101,11 +103,12 @@ export function BookingsPage() {
             <div className="booking-detail-row"><Users size={16} /> {selected.fullName} · {selected.people} people</div>
             <div className="booking-detail-row"><Phone size={16} /> {selected.mobileNumber}</div>
             <div className="booking-detail-row"><CalendarDays size={16} /> {selected.date} at {selected.time}</div>
+            {/* Table booking disabled:
             <div className="booking-detail-row">Table preference: <strong>{selected.tablePreference}</strong></div>
-            {selected.table && <div className="booking-detail-row">Assigned table: <strong>{selected.table.name}</strong>{selected.table.section ? ` · ${selected.table.section}` : ""}</div>}
-            {selected.preorder && <div className="booking-detail-row">Pre-order: <strong>₹{selected.preorder.total}</strong><br />{selected.preorder.items.map((item) => <span key={item.id}>{item.quantity}× {item.name}<br /></span>)}</div>}
+            {selected.table && <div className="booking-detail-row">Assigned table: <strong>{selected.table.name}</strong>{selected.table.section ? ` · ${selected.table.section}` : ""}</div>} */}
+            {selected.preorder && <div className="booking-detail-row">Ordered items: <strong>₹{selected.preorder.total}</strong><br />{selected.preorder.items.map((item) => <span key={item.id}>{item.quantity}× {item.name} · ₹{item.lineTotal}<br /></span>)}</div>}
             {selected.specialRequest && <div className="booking-detail-row">Special request: {selected.specialRequest}</div>}
-            <div className="booking-detail-row">Advance paid: <strong>₹{selected.advancePaid}</strong></div>
+            <div className="booking-detail-row">Amount paid: <strong>₹{selected.advancePaid}</strong></div>
             <div className="booking-detail-row">Status: <span className={clsx("badge", `badge--${selected.status}`)}>{selected.status}</span></div>
             {selected.cancellationReason && <div className="booking-detail-row">Cancellation reason: {selected.cancellationReason}</div>}
             {selected.refund && <div className="booking-detail-row">Refund: {selected.refund.eligible ? `₹${selected.refund.amount} eligible` : "Not eligible"}</div>}

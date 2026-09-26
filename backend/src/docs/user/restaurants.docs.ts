@@ -134,45 +134,7 @@
  *         $ref: "#/components/responses/ValidationError"
  */
 
-/**
- * @openapi
- * /api/restaurants/{id}/tables/availability:
- *   get:
- *     tags: ["User: Tables"]
- *     summary: Check which physical tables are free for a date/time/party size
- *     description: Lets the app show real tables (not just slot capacity) before the customer books.
- *     security:
- *       - ClientKey: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: string, format: uuid }
- *       - in: query
- *         name: date
- *         required: true
- *         schema: { type: string, example: "2026-09-25" }
- *       - in: query
- *         name: time
- *         required: true
- *         schema: { type: string, example: "12:00 PM" }
- *       - in: query
- *         name: people
- *         schema: { type: integer, minimum: 1, default: 1 }
- *       - in: query
- *         name: tablePreference
- *         schema: { type: string, enum: [Any Table, Window Seat, Indoor Seat, Outdoor Seat] }
- *     responses:
- *       200:
- *         description: Table availability for the requested slot
- *         content:
- *           application/json:
- *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
- *       404:
- *         $ref: "#/components/responses/NotFound"
- *       422:
- *         $ref: "#/components/responses/ValidationError"
- */
+// Table booking disabled — GET /api/restaurants/{id}/tables/availability is turned off for now.
 
 /**
  * @openapi
@@ -194,21 +156,22 @@
  *         application/json:
  *           schema:
  *             type: object
- *             required: [date, time, people, tablePreference, fullName, mobileNumber, payment]
+ *             required: [date, time, people, fullName, mobileNumber, preorderItems, payment]
  *             properties:
  *               date: { type: string, example: "2026-09-20" }
  *               time: { type: string, example: "07:30 PM" }
  *               people: { type: integer, minimum: 1 }
- *               tablePreference: { type: string, description: "One of the configured table preference labels" }
+ *               tablePreference: { type: string, description: "Deprecated (table booking disabled). Optional, defaults to Any Table." }
  *               specialRequest: { type: string, maxLength: 500 }
  *               fullName: { type: string }
  *               mobileNumber: { type: string }
  *               email: { type: string, format: email }
  *               latitude: { type: number }
  *               longitude: { type: number }
- *               tableId: { type: string, format: uuid, description: "Optional physical table; otherwise the smallest suitable table is selected" }
  *               preorderItems:
  *                 type: array
+ *                 minItems: 1
+ *                 description: Must be the same items (same total) used for /api/payments/initiate.
  *                 items:
  *                   type: object
  *                   required: [menuItemId, quantity]

@@ -139,4 +139,35 @@
  *       404:
  *         $ref: "#/components/responses/NotFound"
  */
+/**
+ * @openapi
+ * /api/admin/restaurants/{restaurantId}/slots/{slotId}/permanent:
+ *   delete:
+ *     tags: ["Admin: Slots"]
+ *     summary: Permanently delete a slot
+ *     description: If any booking used this slot time, the slot is deactivated instead.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: restaurantId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: path
+ *         name: slotId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Deleted permanently (data.deleted = true) or, when history exists, deactivated instead (data.deactivated = true)
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ */
+
 export {};

@@ -26,14 +26,34 @@ afterEach(() => {
 });
 
 describe("initiatePayment", () => {
-  it("always charges the server-configured advance amount, ignoring any client input", async () => {
+  const restaurant = { id: "r1", status: "ACTIVE" };
+
+  it("charges the DB total of the selected menu items", async () => {
+    prisma.restaurant.findUnique.mockResolvedValue(restaurant);
+    prisma.menuItem.findMany.mockResolvedValue([
+      { id: "item-1", price: "120.00" },
+      { id: "item-2", price: "35.50" },
+    ]);
     prisma.payment.create.mockResolvedValue({ id: "payment-1" });
-    const order = await initiatePayment("customer-A");
-    expect(order.amount).toBe(99); // RESTAURANT_BOOKING_ADVANCE_INR from .env
+    const order = await initiatePayment("customer-A", {
+      restaurantId: "r1",
+      items: [
+        { menuItemId: "item-1", quantity: 2 },
+        { menuItemId: "item-2", quantity: 1 },
+      ],
+    });
+    expect(order.amount).toBe(275.5);
     expect(order.currency).toBe("INR");
     expect(prisma.payment.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ amount: 99, currency: "INR", status: "CREATED" }) }),
+      expect.objectContaining({ data: expect.objectContaining({ amount: 275.5, currency: "INR", status: "CREATED" }) }),
     );
+  });
+
+  it("rejects when a selected item is unavailable", async () => {
+    prisma.restaurant.findUnique.mockResolvedValue(restaurant);
+    prisma.menuItem.findMany.mockResolvedValue([]);
+    await expect(initiatePayment("customer-A", { restaurantId: "r1", items: [{ menuItemId: "item-1", quantity: 1 }] })).rejects.toThrow(/unavailable/i);
+    expect(prisma.payment.create).not.toHaveBeenCalled();
   });
 });
 

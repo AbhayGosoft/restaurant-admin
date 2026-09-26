@@ -187,4 +187,35 @@
  *       404:
  *         $ref: "#/components/responses/NotFound"
  */
+/**
+ * @openapi
+ * /api/admin/restaurants/{restaurantId}/tables/{tableId}/permanent:
+ *   delete:
+ *     tags: ["Admin: Tables"]
+ *     summary: Permanently delete a dining table
+ *     description: If the table was assigned to any booking, it is deactivated instead.
+ *     security:
+ *       - ClientKey: []
+ *       - AdminBearer: []
+ *     parameters:
+ *       - in: path
+ *         name: restaurantId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: path
+ *         name: tableId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Deleted permanently (data.deleted = true) or, when history exists, deactivated instead (data.deactivated = true)
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+ *       401:
+ *         $ref: "#/components/responses/Unauthorized"
+ *       404:
+ *         $ref: "#/components/responses/NotFound"
+ */
+
 export {};

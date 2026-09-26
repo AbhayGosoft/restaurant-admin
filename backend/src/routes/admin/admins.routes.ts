@@ -103,4 +103,22 @@ router.delete(
   }),
 );
 
+// Hard delete. Admins hold no booking/payment history, so they are always removed for real;
+// restaurant assignments cascade. The last active SuperAdmin can never be removed.
+router.delete(
+  "/:id/permanent",
+  asyncHandler(async (req, res) => {
+    const id = idParam(req);
+    if (id === req.admin!.id) throw new ApiError(400, "You cannot delete your own account");
+    const admin = await prisma.adminUser.findUnique({ where: { id } });
+    if (!admin) throw new ApiError(404, "Admin not found");
+    if (admin.role === "SUPERADMIN" && admin.status === "ACTIVE") {
+      const activeSuperAdmins = await prisma.adminUser.count({ where: { role: "SUPERADMIN", status: "ACTIVE" } });
+      if (activeSuperAdmins <= 1) throw new ApiError(409, "Cannot delete the last active SuperAdmin");
+    }
+    await prisma.adminUser.delete({ where: { id } });
+    sendSuccess(res, { deleted: true, deactivated: false }, "Admin deleted permanently");
+  }),
+);
+
 export default router;
